@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cast } from "@/game/content/cast";
 import { recordedEvents as extractedRecordedEvents } from "@/game/content/legacy-events";
 import {
@@ -8,6 +8,7 @@ import {
   partyFeed as extractedPartyFeed,
 } from "@/game/content/legacy-feed";
 import { reduceGame } from "@/game/reducer";
+import { selectAudienceForecast } from "@/game/selectors/audience-forecast";
 import { selectAvailableFootage } from "@/game/selectors/episode-bank";
 import { toFootageView } from "@/game/selectors/event-view";
 import { selectFeedEvents } from "@/game/selectors/feed";
@@ -16,6 +17,7 @@ import type {
   PersonalityTrait as DomainPersonalityTrait,
   TraitScore as DomainTraitScore,
 } from "@/game/types";
+import { GameInspector } from "./game-inspector";
 import { useGameEngine } from "./use-game-engine";
 
 type ChallengeType = DomainChallengeType;
@@ -30,6 +32,9 @@ type Phase =
   | "editPremiere"
   | "livePremiere"
   | "summaryPremiere"
+  | "editChallenge"
+  | "liveChallenge"
+  | "summaryChallenge"
   | "feedParty"
   | "editVote"
   | "liveVote"
@@ -85,6 +90,27 @@ type CutApproach = {
 type TimelineItem =
   | { id: string; kind: "ad"; title: string; duration: 4 }
   | ({ kind: "event"; approach: CutApproach } & RecordedEvent);
+
+type UiSeasonSave = {
+  version: 1;
+  started: boolean;
+  phase: Phase;
+  view: AppView;
+  windowOpen: boolean;
+  feedCount: number;
+  partyCount: number;
+  challengeType: ChallengeType | null;
+  leaderId: string | null;
+  activeIds: string[];
+  week: number;
+  timeline: TimelineItem[];
+  eventApproaches: Record<string, CutApproach>;
+  liveProgress: number;
+  nominees: string[];
+  audiencePick: string | null;
+  lastEliminatedId: string | null;
+  winnerId: string | null;
+};
 
 const inlineParticipants: Participant[] = [
   {
@@ -433,6 +459,7 @@ const introFeed = process.env.NEXT_PUBLIC_LEGACY_CONTENT === "inline" ? inlineIn
 const partyFeed = process.env.NEXT_PUBLIC_LEGACY_CONTENT === "inline" ? inlinePartyFeed : extractedPartyFeed;
 
 const FEED_REFRESH_MS = 3500;
+const UI_SAVE_KEY = "rede-plana-ui-season";
 
 function Avatar({
   participant,
@@ -522,6 +549,88 @@ export default function Home() {
   const [lastEliminatedId, setLastEliminatedId] = useState<string | null>(null);
   const [winnerId, setWinnerId] = useState<string | null>(null);
   const [soundOn, setSoundOn] = useState(true);
+  const uiSaveReady = useRef(false);
+
+  useEffect(() => {
+    const raw = window.localStorage.getItem(UI_SAVE_KEY);
+    if (!raw) {
+      uiSaveReady.current = true;
+      return;
+    }
+    let saved: UiSeasonSave | null = null;
+    try {
+      const parsed = JSON.parse(raw) as UiSeasonSave;
+      if (parsed.version === 1 && Array.isArray(parsed.activeIds) && Array.isArray(parsed.timeline)) saved = parsed;
+    } catch {
+      saved = null;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      if (saved) {
+        setStarted(saved.started);
+        setPhase(saved.phase);
+        setView(saved.view);
+        setWindowOpen(saved.windowOpen);
+        setFeedCount(saved.feedCount);
+        setPartyCount(saved.partyCount);
+        setChallengeType(saved.challengeType);
+        setLeaderId(saved.leaderId);
+        setActiveIds(saved.activeIds);
+        setWeek(saved.week);
+        setTimeline(saved.timeline);
+        setEventApproaches(saved.eventApproaches);
+        setLiveProgress(saved.liveProgress);
+        setNominees(saved.nominees);
+        setAudiencePick(saved.audiencePick);
+        setLastEliminatedId(saved.lastEliminatedId);
+        setWinnerId(saved.winnerId);
+      }
+      uiSaveReady.current = true;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
+    if (!uiSaveReady.current) return;
+    const saved: UiSeasonSave = {
+      version: 1,
+      started,
+      phase,
+      view,
+      windowOpen,
+      feedCount,
+      partyCount,
+      challengeType,
+      leaderId,
+      activeIds,
+      week,
+      timeline,
+      eventApproaches,
+      liveProgress,
+      nominees,
+      audiencePick,
+      lastEliminatedId,
+      winnerId,
+    };
+    window.localStorage.setItem(UI_SAVE_KEY, JSON.stringify(saved));
+  }, [
+    activeIds,
+    audiencePick,
+    challengeType,
+    eventApproaches,
+    feedCount,
+    lastEliminatedId,
+    leaderId,
+    liveProgress,
+    nominees,
+    partyCount,
+    phase,
+    started,
+    timeline,
+    view,
+    week,
+    windowOpen,
+    winnerId,
+  ]);
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem("rede-plana-theme");
@@ -546,9 +655,15 @@ export default function Home() {
   const leader = participants.find((participant) => participant.id === leaderId) ?? null;
   const lastEliminated = participants.find((participant) => participant.id === lastEliminatedId) ?? null;
   const winner = participants.find((participant) => participant.id === winnerId) ?? null;
+  const latestChallengeResult = [...shadowGameState.competition.challengeHistory]
+    .reverse()
+    .find((result) => result.week === week) ?? null;
+  const challengeRunnerUp = latestChallengeResult?.standings[1]
+    ? participants.find((participant) => participant.id === latestChallengeResult.standings[1].participantId) ?? null
+    : null;
 
-  const isEditPhase = phase === "editPremiere" || phase === "editVote" || phase === "editElimination" || phase === "editFinal";
-  const isLivePhase = phase === "livePremiere" || phase === "liveVote" || phase === "liveElimination" || phase === "liveFinal";
+  const isEditPhase = phase === "editPremiere" || phase === "editChallenge" || phase === "editVote" || phase === "editElimination" || phase === "editFinal";
+  const isLivePhase = phase === "livePremiere" || phase === "liveChallenge" || phase === "liveVote" || phase === "liveElimination" || phase === "liveFinal";
   const dynamicIntroFeed = useMemo(
     () => selectFeedEvents(shadowGameState, "arrival", 1),
     [shadowGameState],
@@ -569,6 +684,7 @@ export default function Home() {
   const availableEvents = useMemo(() => {
     const episodeKind =
       phase === "editPremiere" ? "premiere"
+        : phase === "editChallenge" ? "challenge"
         : phase === "editVote" ? "vote"
           : phase === "editElimination" ? "elimination"
             : "final";
@@ -581,13 +697,15 @@ export default function Home() {
     const ids =
       phase === "editPremiere"
         ? ["chegadas", "mala-trocada", "pacto-varanda", "cafe-sem-acucar", "prova-lider", "confessionario"]
+        : phase === "editChallenge"
+          ? ["prova-lider", "confessionario", "pacto-varanda", "melhores-semana"]
         : phase === "editVote"
           ? ["festa-neon", "microfone-aberto", "danca-jussara", "pacto-varanda", "indicacao-lider", "voto-casa"]
           : phase === "editElimination"
             ? ["melhores-semana", "microfone-aberto", "indicacao-lider", "voto-casa", "despedida"]
             : ["melhores-semana", "festa-neon", "prova-lider", "discursos-final", "confessionario"];
 
-    const dynamicEpisode = phase === "editPremiere" || phase === "editVote";
+    const dynamicEpisode = phase === "editPremiere" || phase === "editChallenge" || phase === "editVote" || phase === "editElimination" || phase === "editFinal";
     let events: RecordedEvent[] = dynamicEpisode && shadowGameState.mode === "dynamic" && dynamicEvents.length >= 2
       ? dynamicEvents
       : recordedEvents.filter((event) => ids.includes(event.id) && !selectedIds.has(event.id));
@@ -601,10 +719,17 @@ export default function Home() {
 
   const timelineDuration = timeline.reduce((sum, item) => sum + item.duration, 0);
   const eventCount = timeline.filter((item) => item.kind === "event").length;
-  const totalHeat = timeline
-    .filter((item): item is TimelineItem & { kind: "event"; heat: number } => item.kind === "event")
-    .reduce((sum, item) => sum + item.heat, 0);
-  const predictedAudience = Math.round(18 + totalHeat / Math.max(eventCount, 1) / 4 + week * 1.4);
+  const plannedCuts = useMemo(() => {
+    const knownEventIds = new Set(shadowGameState.house.eventHistory.map((event) => event.id));
+    return timeline
+      .filter((item): item is TimelineItem & { kind: "event" } => item.kind === "event" && knownEventIds.has(item.id))
+      .map((item) => ({
+        eventInstanceId: item.id,
+        perspectiveIds: item.approach.perspectiveIds,
+        tone: item.approach.tone,
+      }));
+  }, [shadowGameState.house.eventHistory, timeline]);
+  const predictedAudience = selectAudienceForecast(shadowGameState, plannedCuts).points;
 
   function begin() {
     setStarted(true);
@@ -625,7 +750,7 @@ export default function Home() {
     setWindowOpen(true);
   }
 
-  function startEdit(nextPhase: Extract<Phase, "editPremiere" | "editVote" | "editElimination" | "editFinal">) {
+  function startEdit(nextPhase: Extract<Phase, "editPremiere" | "editChallenge" | "editVote" | "editElimination" | "editFinal">) {
     setPhase(nextPhase);
     setView("edit");
     setTimeline(adSlots);
@@ -643,7 +768,7 @@ export default function Home() {
     const canonicalResult = reduceGame(shadowGameState, command);
     dispatchGame(command);
     setLeaderId(canonicalResult.state.competition.leaderId);
-    startEdit("editPremiere");
+    startEdit(week === 1 ? "editPremiere" : "editChallenge");
   }
 
   function involvedIdsFor(event: RecordedEvent) {
@@ -768,17 +893,10 @@ export default function Home() {
       setEditorError("Inclua pelo menos dois acontecimentos antes de fechar o corte.");
       return;
     }
-    const knownEventIds = new Set(shadowGameState.house.eventHistory.map((event) => event.id));
-    const cuts = timeline
-      .filter((item): item is TimelineItem & { kind: "event" } => item.kind === "event" && knownEventIds.has(item.id))
-      .map((item) => ({
-        eventInstanceId: item.id,
-        perspectiveIds: item.approach.perspectiveIds,
-        tone: item.approach.tone,
-      }));
-    if (cuts.length > 0) dispatchGame({ type: "BROADCAST_EPISODE", cuts });
+    if (plannedCuts.length > 0) dispatchGame({ type: "BROADCAST_EPISODE", cuts: plannedCuts });
     setLiveProgress(0);
     if (phase === "editPremiere") setPhase("livePremiere");
+    if (phase === "editChallenge") setPhase("liveChallenge");
     if (phase === "editVote") setPhase("liveVote");
     if (phase === "editElimination") setPhase("liveElimination");
     if (phase === "editFinal") setPhase("liveFinal");
@@ -797,6 +915,10 @@ export default function Home() {
   function finishLive() {
     if (phase === "livePremiere") {
       setPhase("summaryPremiere");
+      return;
+    }
+    if (phase === "liveChallenge") {
+      setPhase("summaryChallenge");
       return;
     }
     if (phase === "liveVote") {
@@ -881,6 +1003,7 @@ export default function Home() {
 
   function confirmAudienceElimination() {
     if (!audiencePick) return;
+    dispatchGame({ type: "REGISTER_AUDIENCE_RESULT", participantId: audiencePick });
     startEdit("editElimination");
   }
 
@@ -924,7 +1047,9 @@ export default function Home() {
       return "O programa estreia hoje a noite com a primeira prova do lider. Qual vai ser a prova?";
     }
     if (phase === "editPremiere") return "Agora é hora de escolher os cortes do programa.";
+    if (phase === "editChallenge") return "Monte o episódio semanal da prova e mostre como a nova liderança mexeu com a casa.";
     if (phase === "summaryPremiere") return "Boa estreia. Volte ao feed: a casa não para quando a transmissão termina.";
+    if (phase === "summaryChallenge") return "A nova liderança está definida. Volte ao feed para acompanhar as consequências.";
     if (phase === "feedParty") return "A festa rendeu. Daqui a dois dias, o episódio termina com a formação da votação.";
     if (phase === "editVote") return "Construa tensão até a indicação do líder e a votação da casa.";
     if (phase === "audienceVote") return "A votação está aberta. Agora o público decide quem deve sair.";
@@ -1129,6 +1254,7 @@ export default function Home() {
   function renderEditor() {
     const episodeLabel =
       phase === "editPremiere" ? "Estreia"
+        : phase === "editChallenge" ? `Prova do líder · Semana ${week}`
         : phase === "editVote" ? "Formação da votação"
           : phase === "editElimination" ? "Noite de eliminação"
             : "Grande final";
@@ -1136,7 +1262,7 @@ export default function Home() {
       <div className="editor-panel">
         <div className="editor-heading">
           <div>
-            <span className="eyebrow">ILHA DE EDIÇÃO · EP {String(week * 3 - (phase === "editPremiere" ? 2 : phase === "editVote" ? 1 : 0)).padStart(2, "0")}</span>
+            <span className="eyebrow">ILHA DE EDIÇÃO · EP {String(week * 3 - (phase === "editPremiere" || phase === "editChallenge" ? 2 : phase === "editVote" ? 1 : 0)).padStart(2, "0")}</span>
             <h2>{episodeLabel}</h2>
           </div>
           <div className="runtime">
@@ -1324,7 +1450,7 @@ export default function Home() {
         <section className="performance-review">
           <div className="review-copy">
             <span className="eyebrow">LIVE PERFORMANCE REVIEW</span>
-            <h1>{phase === "liveFinal" ? "A grande final está no ar" : phase === "liveElimination" ? "O Brasil espera o resultado" : "O programa entrou no ar"}</h1>
+            <h1>{phase === "liveFinal" ? "A grande final está no ar" : phase === "liveElimination" ? "O Brasil espera o resultado" : phase === "liveChallenge" ? "A disputa pela liderança está no ar" : "O programa entrou no ar"}</h1>
             <p>Monitoramento de audiência minuto a minuto.</p>
           </div>
           <div className="audience-number"><b>{liveAudience}</b><span>pontos</span></div>
@@ -1348,14 +1474,19 @@ export default function Home() {
     );
   }
 
-  if (phase === "summaryPremiere") {
+  if (phase === "summaryPremiere" || phase === "summaryChallenge") {
+    const premiere = phase === "summaryPremiere";
     return (
       <main className={`result-screen theme-${theme}`}>
         <ThemeSwitch onToggle={toggleTheme} theme={theme} />
         <div className="result-window">
-          <span className="eyebrow">RELATÓRIO DE EXIBIÇÃO · EPISÓDIO 01</span>
-          <h1>Uma estreia acima da meta.</h1>
-          <p>O primeiro episódio apresentou o elenco, construiu uma rivalidade e terminou com {leader?.name ?? "um participante"} na liderança.</p>
+          <span className="eyebrow">RELATÓRIO DE EXIBIÇÃO · EPISÓDIO {String(week * 3 - 2).padStart(2, "0")}</span>
+          <h1>{premiere ? "Uma estreia acima da meta." : `A liderança da semana ${week} está definida.`}</h1>
+          <p>
+            {premiere
+              ? `O primeiro episódio apresentou o elenco, construiu uma rivalidade e terminou com ${leader?.name ?? "um participante"} na liderança.`
+              : `${leader?.name ?? "Um participante"} venceu a prova${challengeRunnerUp ? `, com ${challengeRunnerUp.name} logo atrás` : ""}. A casa já começou a reagir ao novo poder.`}
+          </p>
           <div className="summary-metrics">
             <div><span>AUDIÊNCIA MÉDIA</span><b>{predictedAudience},4</b><small>meta 24,0</small></div>
             <div><span>PICO</span><b>{predictedAudience + 4},1</b><small>durante a prova</small></div>
@@ -1363,7 +1494,7 @@ export default function Home() {
           </div>
           <div className="leader-callout">
             {leader && <Avatar participant={leader} size="small" />}
-            <div><span>PRIMEIRO LÍDER</span><b>{leader?.name}</b></div>
+            <div><span>{premiere ? "PRIMEIRO LÍDER" : `LÍDER · SEMANA ${String(week).padStart(2, "0")}`}</span><b>{leader?.name}</b></div>
           </div>
           <button
             className="button button-primary"
@@ -1386,6 +1517,14 @@ export default function Home() {
     const choices = phase === "winnerVote"
       ? activeParticipants
       : participants.filter((participant) => nominees.includes(participant.id));
+    const projectionWeight = (participantId: string) => {
+      const audience = shadowGameState.characters[participantId]?.audience;
+      if (!audience) return 1;
+      return phase === "winnerVote"
+        ? Math.max(1, audience.support + audience.awareness * 0.2)
+        : Math.max(1, 100 - audience.support + audience.controversy * 0.35);
+    };
+    const totalProjection = choices.reduce((sum, participant) => sum + projectionWeight(participant.id), 0);
     return (
       <main className={`vote-screen theme-${theme}`}>
         <ThemeSwitch onToggle={toggleTheme} theme={theme} />
@@ -1407,6 +1546,10 @@ export default function Home() {
                 <span>{participant.city}</span>
                 <b>{participant.name}</b>
                 <small>{participant.occupation}</small>
+                <small>
+                  {Math.round(projectionWeight(participant.id) / Math.max(1, totalProjection) * 100)}%
+                  {" "}{phase === "winnerVote" ? "de apoio projetado" : "de risco projetado"}
+                </small>
                 <i>{audiencePick === participant.id ? "SELECIONADO ✓" : "VOTAR"}</i>
               </button>
             ))}
@@ -1481,6 +1624,7 @@ export default function Home() {
             className="button button-primary"
             onClick={() => {
               engineControls.resetSeason();
+              window.localStorage.removeItem(UI_SAVE_KEY);
               window.location.reload();
             }}
             type="button"
@@ -1608,6 +1752,7 @@ export default function Home() {
           </section>
         </div>
       )}
+      <GameInspector actionLog={engineControls.actionLog} state={shadowGameState} />
       <div className="crt-overlay" aria-hidden="true" />
     </main>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useReducer } from "react";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 import type { Dispatch } from "react";
 import type { GameCommand } from "@/game/commands";
 import { gameReducer } from "@/game/reducer";
@@ -19,23 +19,28 @@ export function useGameEngine(seed: string, mode: EventEngineMode = "shadow") {
   const [state, engineDispatch] = useReducer(engineReducer, { seed, mode }, ({ seed: initialSeed, mode: initialMode }) =>
     createInitialState(initialSeed, initialMode));
   const { load, save, clear } = useSeasonSave();
+  const actionLog = useRef<GameCommand[]>([]);
   const ready = state.revision > 0;
 
   useEffect(() => {
     const restored = load();
     if (restored) {
-      engineDispatch({ type: "__RESTORE_SNAPSHOT", state: restored });
+      actionLog.current = restored.actionLog;
+      engineDispatch({ type: "__RESTORE_SNAPSHOT", state: restored.snapshot });
     } else {
       const generatedSeed = globalThis.crypto?.randomUUID?.() ?? seed;
-      engineDispatch({ type: "START_SEASON", seed: generatedSeed });
+      const command = { type: "START_SEASON", seed: generatedSeed } as const;
+      actionLog.current = [command];
+      engineDispatch(command);
     }
   }, [load, seed]);
 
   useEffect(() => {
-    if (ready) save(state);
+    if (ready) save(state, actionLog.current);
   }, [ready, save, state]);
 
   const dispatch = useCallback<Dispatch<GameCommand>>((command) => {
+    actionLog.current.push(structuredClone(command));
     engineDispatch(command);
   }, []);
 
@@ -43,5 +48,5 @@ export function useGameEngine(seed: string, mode: EventEngineMode = "shadow") {
     clear();
   }, [clear]);
 
-  return [state, dispatch, { ready, resetSeason }] as const;
+  return [state, dispatch, { ready, resetSeason, actionLog }] as const;
 }

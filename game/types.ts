@@ -148,6 +148,7 @@ export type AppliedEffect =
       delta: number;
     }
   | { type: "openThread"; threadId: StoryThreadId; threadType: string; actorIds: ParticipantId[] }
+  | { type: "advanceThread"; threadId: StoryThreadId; delta: number; resolve: boolean }
   | { type: "setFlag"; participantId?: ParticipantId; key: string; value: boolean | number | string };
 
 export type EventInstance = {
@@ -186,6 +187,34 @@ export type ChallengeResult = {
   winnerId: ParticipantId;
 };
 
+export type NominationBallot = {
+  voterId: ParticipantId;
+  targetId: ParticipantId;
+  motiveTags: string[];
+  relationship: Pick<
+    RelationshipState,
+    "affinity" | "trust" | "respect" | "rivalry" | "resentment" | "strategicAlignment"
+  >;
+  score: number;
+};
+
+export type NominationResult = {
+  week: number;
+  leaderId: ParticipantId;
+  leaderTargetId: ParticipantId;
+  ballots: NominationBallot[];
+  totals: Record<ParticipantId, number>;
+  houseTargetId: ParticipantId;
+  tieBreakingDecision: string | null;
+};
+
+export type EliminationResult = {
+  week: number;
+  eliminatedId: ParticipantId;
+  nomineeIds: ParticipantId[];
+  resolvedAtTick: number;
+};
+
 export type BroadcastCut = {
   eventInstanceId: EventInstanceId;
   perspectiveIds: ParticipantId[];
@@ -195,6 +224,7 @@ export type BroadcastCut = {
 export type BroadcastRecord = {
   week: number;
   cuts: BroadcastCut[];
+  audienceForecast: number;
 };
 
 export type GameState = {
@@ -215,11 +245,16 @@ export type GameState = {
     leaderId: ParticipantId | null;
     nomineeIds: ParticipantId[];
     challengeHistory: ChallengeResult[];
+    nominationHistory: NominationResult[];
+    eliminationHistory: EliminationResult[];
     eliminatedIds: ParticipantId[];
     winnerId: ParticipantId | null;
   };
   house: { eventHistory: EventInstance[]; generatedWindows: string[] };
-  narrative: { threads: Record<StoryThreadId, StoryThread> };
+  narrative: {
+    threads: Record<StoryThreadId, StoryThread>;
+    publicStorylines: Record<string, number>;
+  };
   broadcasts: BroadcastRecord[];
 };
 

@@ -2,9 +2,9 @@ import { cast } from "./content/cast";
 import { createRng, nextRandom } from "./rng";
 import type { CharacterState, GameState, RelationshipKey, RelationshipState } from "./types";
 
-export const SCHEMA_VERSION = 1;
-export const ENGINE_VERSION = "0.1.0";
-export const CATALOG_VERSION = "0.1.0";
+export const SCHEMA_VERSION = 2;
+export const ENGINE_VERSION = "0.2.0";
+export const CATALOG_VERSION = "0.2.0";
 
 const clamp = (value: number, minimum = 0, maximum = 100) => Math.min(maximum, Math.max(minimum, value));
 
@@ -43,7 +43,17 @@ export function createInitialState(seed: string, mode: GameState["mode"] = "shad
     seasonId: `season-${createRng(seed).state[0].toString(36)}`, mode, revision: 0, diagnostics: [], rng,
     clock: { tick: 0, week: 1, day: 1, window: "arrival" },
     castOrder: cast.map((profile) => profile.id), characters, relationships, alliances: {},
-    competition: { leaderId: null, nomineeIds: [], challengeHistory: [], eliminatedIds: [], winnerId: null },
-    house: { eventHistory: [], generatedWindows: [] }, narrative: { threads: {} }, broadcasts: [],
+    competition: {
+      leaderId: null,
+      nomineeIds: [],
+      challengeHistory: [],
+      nominationHistory: [],
+      eliminationHistory: [],
+      eliminatedIds: [],
+      winnerId: null,
+    },
+    house: { eventHistory: [], generatedWindows: [] },
+    narrative: { threads: {}, publicStorylines: {} },
+    broadcasts: [],
   };
 }

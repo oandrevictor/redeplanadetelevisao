@@ -1,9 +1,10 @@
 import type { EventInstance, GameState } from "../types";
 
-export type EpisodeKind = "premiere" | "vote" | "elimination" | "final";
+export type EpisodeKind = "premiere" | "challenge" | "vote" | "elimination" | "final";
 
 const windowsByEpisode: Record<EpisodeKind, Set<EventInstance["window"]>> = {
   premiere: new Set(["arrival", "post_challenge"]),
+  challenge: new Set(["post_challenge"]),
   vote: new Set(["party", "campaign", "post_nomination"]),
   elimination: new Set(["post_nomination", "elimination", "post_elimination"]),
   final: new Set(["final"]),
