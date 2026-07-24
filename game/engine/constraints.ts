@@ -29,6 +29,13 @@ export function checkConstraints(state: GameState, candidate: EventCandidate): C
   if (recentTemplate && state.clock.tick - recentTemplate.occurredAt.tick < candidate.template.cooldown.templateTicks) {
     reasons.push("template cooldown");
   }
+  const templateAlreadyUsedInWindow = state.house.eventHistory.some((event) =>
+    event.templateId === candidate.template.id
+    && event.occurredAt.week === state.clock.week
+    && event.window === state.clock.window);
+  if (templateAlreadyUsedInWindow) {
+    reasons.push("template already used in this story window");
+  }
 
   const pair = [...candidate.actorIds].sort().join(">");
   const recentPair = [...state.house.eventHistory].reverse().find((event) => [...event.actorIds].sort().join(">") === pair);

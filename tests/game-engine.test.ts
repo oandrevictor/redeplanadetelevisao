@@ -124,8 +124,40 @@ test("arrival and party queues are generated once and selectors never reroll", (
   state = command(repeated, { type: "CONFIRM_CHALLENGE", challengeType: "atencao" });
   state = command(state, { type: "START_PARTY" });
   const party = selectFeedEvents(state, "party", 1);
+  const partyTemplateIds = state.house.eventHistory
+    .filter((event) => event.window === "party" && event.occurredAt.week === 1)
+    .map((event) => event.templateId);
   assert.equal(party.length, 4);
+  assert.equal(new Set(partyTemplateIds).size, partyTemplateIds.length);
   assert.notDeepEqual(party.map((entry) => entry.title), arrival.map((entry) => entry.title));
+});
+
+test("story windows do not repeat a template and party gossip does not imply shared microphone audio", () => {
+  const gossip = eventTemplates.find((template) => template.id === "party-open-mic");
+  assert.ok(gossip);
+  assert.equal(gossip.revision, 2);
+  assert.doesNotMatch(`${gossip.title} ${gossip.description}`, /microfone/i);
+  assert.match(gossip.description, /desconfia das alianças/i);
+  assert.match(gossip.description, /conversa é repassada/i);
+
+  for (let index = 0; index < 30; index += 1) {
+    let state = command(createInitialState(`party-variety-${index}`, "dynamic"), {
+      type: "START_SEASON",
+      seed: `party-variety-${index}`,
+    });
+    state = command(state, { type: "CONFIRM_CHALLENGE", challengeType: "sorte" });
+    state = command(state, { type: "START_PARTY" });
+    const party = selectFeedEvents(state, "party", 1);
+    const partyTemplateIds = state.house.eventHistory
+      .filter((event) => event.window === "party" && event.occurredAt.week === 1)
+      .map((event) => event.templateId);
+    assert.equal(party.length, 4);
+    assert.equal(
+      new Set(partyTemplateIds).size,
+      partyTemplateIds.length,
+      `party-variety-${index} repeated a party template`,
+    );
+  }
 });
 
 test("episode bank uses unique event instances and preserves frozen historical actors", () => {
