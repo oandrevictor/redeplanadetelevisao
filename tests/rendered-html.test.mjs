@@ -63,6 +63,11 @@ test("source contains the complete playable season loop", async () => {
   assert.match(page, /draggable/);
   assert.match(page, /Intervalo \$\{number\}/);
   assert.match(page, /Os personagens estao chegando na casa/);
+  assert.match(page, /Ao escolher um corte, voce pode escolher a abordagem/);
+  assert.match(page, /Todos os lados/);
+  assert.match(page, /Engraçado/);
+  assert.match(page, /Conflituoso/);
+  assert.doesNotMatch(page, /Maior potencial|>potencial</i);
   assert.match(page, /Quem deve sair\?/);
   assert.match(page, /Quem deve vencer\?/);
   assert.match(page, /activeParticipants\.length === 3/);

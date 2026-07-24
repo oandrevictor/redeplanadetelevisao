@@ -3965,3 +3965,158 @@ select:focus-visible {
     display: none;
   }
 }
+
+/* Week-two editorial approach controls */
+
+.computer-shell .event-card:has(.approach-editor) {
+  min-height: 248px;
+}
+
+.computer-shell .approach-editor {
+  min-width: 0;
+  margin: 8px 0;
+  padding: 8px 7px 7px;
+  border: 1px solid var(--document-rule);
+  background: var(--surface-alt);
+  color: var(--ui-text);
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-shadow),
+    inset -1px -1px 0 var(--chrome-hi);
+}
+
+.computer-shell .approach-editor legend {
+  padding: 0 5px;
+  color: var(--accent);
+  font: 700 8px "Courier New", monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.computer-shell .approach-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  align-items: start;
+  gap: 5px;
+}
+
+.computer-shell .approach-row + .approach-row {
+  margin-top: 7px;
+}
+
+.computer-shell .approach-row > span {
+  padding-top: 5px;
+  color: var(--ui-muted);
+  font: 700 7px "Courier New", monospace;
+  text-transform: uppercase;
+}
+
+.computer-shell .approach-options {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.computer-shell .approach-options button {
+  min-height: 22px;
+  padding: 0 6px;
+  border: 0;
+  background: var(--chrome);
+  color: var(--ui-text);
+  cursor: pointer;
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-hi),
+    inset -1px -1px 0 var(--chrome-dark),
+    inset 2px 2px 0 var(--chrome-mid),
+    inset -2px -2px 0 var(--chrome-shadow);
+  font: 8px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .approach-options button[aria-pressed="true"] {
+  padding: 1px 5px 0 7px;
+  background: var(--selection-bg);
+  color: var(--selection-text);
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-dark),
+    inset -1px -1px 0 var(--chrome-hi);
+}
+
+.computer-shell .approach-single {
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  border: 1px solid var(--document-rule);
+  background: var(--surface);
+  color: var(--ui-muted);
+  font: 8px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .approach-tone {
+  align-items: center;
+}
+
+.computer-shell .approach-tone > span {
+  padding-top: 0;
+}
+
+.computer-shell .approach-tone select {
+  width: 100%;
+  height: 25px;
+  padding: 0 5px;
+  border: 1px solid var(--chrome-dark);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--ui-text);
+  box-shadow: inset 1px 1px 0 var(--chrome-shadow), inset -1px -1px 0 var(--chrome-hi);
+  font: 9px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .timeline-item:has(.timeline-approach) {
+  flex-basis: 180px;
+}
+
+.computer-shell .timeline-approach {
+  display: block;
+  margin-top: 5px;
+  padding-top: 4px;
+  border-top: 1px dotted var(--document-rule);
+  color: var(--accent) !important;
+  font: 700 7px/1.25 "Courier New", monospace !important;
+  text-transform: uppercase;
+}
+
+@media (max-width: 980px) {
+  .computer-shell .event-card:has(.approach-editor) {
+    min-height: 225px;
+  }
+
+  .computer-shell .approach-row {
+    grid-template-columns: 1fr;
+  }
+
+  .computer-shell .approach-row > span {
+    padding-top: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .computer-shell .approach-row {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .computer-shell .approach-row > span {
+    padding-top: 5px;
+  }
+}
+
+@media (max-width: 430px) {
+  .computer-shell .approach-row {
+    grid-template-columns: 1fr;
+  }
+
+  .computer-shell .approach-row > span {
+    padding-top: 0;
+  }
+}

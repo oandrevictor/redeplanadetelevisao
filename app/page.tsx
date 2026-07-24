@@ -63,9 +63,16 @@ type RecordedEvent = {
   description: string;
 };
 
+type CutTone = "neutro" | "engracado" | "triste" | "malicioso" | "conflituoso" | "emocional";
+
+type CutApproach = {
+  perspectiveIds: string[];
+  tone: CutTone;
+};
+
 type TimelineItem =
   | { id: string; kind: "ad"; title: string; duration: 4 }
-  | ({ kind: "event" } & RecordedEvent);
+  | ({ kind: "event"; approach: CutApproach } & RecordedEvent);
 
 const participants: Participant[] = [
   {
@@ -353,6 +360,34 @@ const recordedEvents: RecordedEvent[] = [
   },
 ];
 
+const allParticipantIds = participants.map((participant) => participant.id);
+
+const eventParticipantIds: Record<string, string[]> = {
+  chegadas: ["dandara", "iago", "celina"],
+  "mala-trocada": ["bento", "jussara"],
+  "pacto-varanda": ["celina", "ravi", "dandara"],
+  "cafe-sem-acucar": ["bento", "jussara"],
+  "prova-lider": allParticipantIds,
+  confessionario: allParticipantIds,
+  "festa-neon": ["dandara", "iago", "jussara", "ravi"],
+  "microfone-aberto": ["celina", "jussara", "dandara"],
+  "danca-jussara": ["jussara", "iago"],
+  "indicacao-lider": allParticipantIds,
+  "voto-casa": allParticipantIds,
+  despedida: allParticipantIds,
+  "melhores-semana": allParticipantIds,
+  "discursos-final": allParticipantIds,
+};
+
+const toneOptions: Array<{ value: CutTone; label: string }> = [
+  { value: "neutro", label: "Neutro" },
+  { value: "engracado", label: "Engraçado" },
+  { value: "triste", label: "Triste" },
+  { value: "malicioso", label: "Malicioso" },
+  { value: "conflituoso", label: "Conflituoso" },
+  { value: "emocional", label: "Emocional" },
+];
+
 const adSlots: TimelineItem[] = [1, 2, 3, 4].map((number) => ({
   id: `intervalo-${number}`,
   kind: "ad" as const,
@@ -448,9 +483,10 @@ export default function Home() {
   const [activeIds, setActiveIds] = useState(() => participants.map((participant) => participant.id));
   const [week, setWeek] = useState(1);
   const [timeline, setTimeline] = useState<TimelineItem[]>(adSlots);
+  const [eventApproaches, setEventApproaches] = useState<Record<string, CutApproach>>({});
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("Todos");
-  const [sort, setSort] = useState("calor");
+  const [sort, setSort] = useState("gravacao");
   const [editorError, setEditorError] = useState("");
   const [dragged, setDragged] = useState<{ source: "bank" | "timeline"; id: string } | null>(null);
   const [liveProgress, setLiveProgress] = useState(0);
@@ -504,7 +540,7 @@ export default function Home() {
       const query = search.toLocaleLowerCase("pt-BR");
       events = events.filter((event) => `${event.title} ${event.description}`.toLocaleLowerCase("pt-BR").includes(query));
     }
-    return [...events].sort((a, b) => (sort === "duracao" ? a.duration - b.duration : b.heat - a.heat));
+    return sort === "duracao" ? [...events].sort((a, b) => a.duration - b.duration) : events;
   }, [phase, timeline, category, search, sort]);
 
   const timelineDuration = timeline.reduce((sum, item) => sum + item.duration, 0);
@@ -537,9 +573,10 @@ export default function Home() {
     setPhase(nextPhase);
     setView("edit");
     setTimeline(adSlots);
+    setEventApproaches({});
     setSearch("");
     setCategory("Todos");
-    setSort("calor");
+    setSort("gravacao");
     setEditorError("");
     setWindowOpen(true);
   }
@@ -555,8 +592,78 @@ export default function Home() {
     startEdit("editPremiere");
   }
 
+  function involvedIdsFor(event: RecordedEvent) {
+    const configuredIds = eventParticipantIds[event.id] ?? allParticipantIds;
+    const activeInvolvedIds = configuredIds.filter((id) => activeIds.includes(id));
+    return activeInvolvedIds.length > 0 ? activeInvolvedIds : activeIds;
+  }
+
+  function approachFrom(event: RecordedEvent, approaches: Record<string, CutApproach>): CutApproach {
+    const involvedIds = involvedIdsFor(event);
+    const saved = approaches[event.id];
+    if (!saved) return { perspectiveIds: involvedIds, tone: "neutro" };
+    const availablePerspectiveIds = saved.perspectiveIds.filter((id) => involvedIds.includes(id));
+    return {
+      perspectiveIds: availablePerspectiveIds.length > 0 ? availablePerspectiveIds : involvedIds,
+      tone: saved.tone,
+    };
+  }
+
+  function approachFor(event: RecordedEvent) {
+    return approachFrom(event, eventApproaches);
+  }
+
+  function chooseAllPerspectives(event: RecordedEvent) {
+    setEventApproaches((current) => {
+      const approach = approachFrom(event, current);
+      return {
+        ...current,
+        [event.id]: { ...approach, perspectiveIds: involvedIdsFor(event) },
+      };
+    });
+  }
+
+  function togglePerspective(event: RecordedEvent, participantId: string) {
+    setEventApproaches((current) => {
+      const involvedIds = involvedIdsFor(event);
+      const approach = approachFrom(event, current);
+      const allSelected = approach.perspectiveIds.length === involvedIds.length;
+      const perspectiveIds = allSelected
+        ? [participantId]
+        : approach.perspectiveIds.includes(participantId)
+          ? approach.perspectiveIds.length === 1
+            ? approach.perspectiveIds
+            : approach.perspectiveIds.filter((id) => id !== participantId)
+          : [...approach.perspectiveIds, participantId];
+      return {
+        ...current,
+        [event.id]: { ...approach, perspectiveIds },
+      };
+    });
+  }
+
+  function chooseTone(event: RecordedEvent, tone: CutTone) {
+    setEventApproaches((current) => ({
+      ...current,
+      [event.id]: { ...approachFrom(event, current), tone },
+    }));
+  }
+
+  function approachSummary(item: TimelineItem & { kind: "event" }) {
+    const involvedIds = involvedIdsFor(item);
+    const allSelected = item.approach.perspectiveIds.length === involvedIds.length;
+    const perspectiveLabel = allSelected
+      ? "todos os lados"
+      : item.approach.perspectiveIds
+        .map((id) => participants.find((participant) => participant.id === id)?.name.split(" ")[0])
+        .filter(Boolean)
+        .join(" + ");
+    const toneLabel = toneOptions.find((option) => option.value === item.approach.tone)?.label ?? "Neutro";
+    return `${perspectiveLabel} · ${toneLabel}`;
+  }
+
   function addEvent(event: RecordedEvent) {
-    setTimeline((current) => [...current, { ...event, kind: "event" }]);
+    setTimeline((current) => [...current, { ...event, kind: "event", approach: approachFor(event) }]);
     setEditorError("");
   }
 
@@ -581,7 +688,7 @@ export default function Home() {
       if (!event || timeline.some((item) => item.id === event.id)) return;
       setTimeline((current) => {
         const next = [...current];
-        const item: TimelineItem = { ...event, kind: "event" };
+        const item: TimelineItem = { ...event, kind: "event", approach: approachFor(event) };
         if (typeof targetIndex === "number") next.splice(targetIndex, 0, item);
         else next.push(item);
         return next;
@@ -697,6 +804,9 @@ export default function Home() {
   }
 
   function guideMessage() {
+    if (week >= 2 && isEditPhase) {
+      return "Ao escolher um corte, voce pode escolher a abordagem com que isso sera exibido para o publico: ajustando a parcialidade e o tom";
+    }
     if (phase === "email" || phase === "feedIntro" && feedCount < introFeed.length) {
       return "Os personagens estao chegando na casa, abra o feed das cameras para dar uma olhada no que está acontecendo";
     }
@@ -846,6 +956,60 @@ export default function Home() {
     );
   }
 
+  function renderApproachControls(event: RecordedEvent) {
+    if (week < 2) return null;
+    const involvedIds = involvedIdsFor(event);
+    const approach = approachFor(event);
+    const allSelected = approach.perspectiveIds.length === involvedIds.length;
+
+    return (
+      <fieldset
+        className="approach-editor"
+        onDragStart={(dragEvent) => dragEvent.stopPropagation()}
+        onPointerDown={(pointerEvent) => pointerEvent.stopPropagation()}
+      >
+        <legend>Abordagem</legend>
+        <div className="approach-row">
+          <span>Parcialidade</span>
+          {involvedIds.length === 1 ? (
+            <small className="approach-single">
+              Perspectiva única · {participants.find((participant) => participant.id === involvedIds[0])?.name.split(" ")[0]}
+            </small>
+          ) : (
+            <div className="approach-options" role="group" aria-label={`Perspectivas de ${event.title}`}>
+              <button aria-pressed={allSelected} onClick={() => chooseAllPerspectives(event)} type="button">
+                Todos os lados
+              </button>
+              {involvedIds.map((id) => {
+                const participant = participants.find((item) => item.id === id);
+                if (!participant) return null;
+                return (
+                  <button
+                    aria-label={`Incluir perspectiva de ${participant.name}`}
+                    aria-pressed={approach.perspectiveIds.includes(id) && !allSelected}
+                    key={id}
+                    onClick={() => togglePerspective(event, id)}
+                    type="button"
+                  >
+                    {participant.name.split(" ")[0]}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <label className="approach-row approach-tone">
+          <span>Tom</span>
+          <select onChange={(selectEvent) => chooseTone(event, selectEvent.target.value as CutTone)} value={approach.tone}>
+            {toneOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+      </fieldset>
+    );
+  }
+
   function renderEditor() {
     const episodeLabel =
       phase === "editPremiere" ? "Estreia"
@@ -893,6 +1057,9 @@ export default function Home() {
                   <span>{item.kind === "ad" ? "COMERCIAL · FIXO" : item.category}</span>
                   <h3>{item.title}</h3>
                   <small>{item.duration} min</small>
+                  {item.kind === "event" && week >= 2 && (
+                    <small className="timeline-approach">{approachSummary(item)}</small>
+                  )}
                 </div>
                 <div className="timeline-controls">
                   <button aria-label={`Mover ${item.title} para a esquerda`} disabled={index === 0} onClick={() => moveItem(index, -1)} type="button">←</button>
@@ -928,7 +1095,7 @@ export default function Home() {
             <label>
               <span className="sr-only">Ordenar acontecimentos</span>
               <select onChange={(event) => setSort(event.target.value)} value={sort}>
-                <option value="calor">Maior potencial</option>
+                <option value="gravacao">Ordem de gravação</option>
                 <option value="duracao">Menor duração</option>
               </select>
             </label>
@@ -947,11 +1114,7 @@ export default function Home() {
                 </div>
                 <h3>{event.title}</h3>
                 <p>{event.description}</p>
-                <div className="heat-row">
-                  <span>potencial</span>
-                  <div><i style={{ width: `${event.heat}%` }} /></div>
-                  <b>{event.heat}</b>
-                </div>
+                {renderApproachControls(event)}
                 <button onClick={() => addEvent(event)} type="button">+ Adicionar à timeline</button>
               </article>
             ))}
