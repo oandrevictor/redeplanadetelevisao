@@ -1,6 +1,8 @@
 import type { EventTemplate } from "../../types";
 
-const pair = (overrides: Omit<EventTemplate, "revision" | "roles" | "cooldown">): EventTemplate => ({
+type PairOverrides = Omit<EventTemplate, "revision" | "roles" | "cooldown"> & { revision?: number };
+
+const pair = (overrides: PairOverrides): EventTemplate => ({
   revision: 1,
   roles: [{ name: "actor" }, { name: "other", distinct: true }],
   cooldown: { templateTicks: 3, pairTicks: 2 },
@@ -9,7 +11,7 @@ const pair = (overrides: Omit<EventTemplate, "revision" | "roles" | "cooldown">)
 
 const leaderPair = (
   leaderRole: "actor" | "other",
-  overrides: Omit<EventTemplate, "revision" | "roles" | "cooldown">,
+  overrides: PairOverrides,
 ): EventTemplate => ({
   ...pair(overrides),
   roles: [
@@ -20,7 +22,7 @@ const leaderPair = (
 
 const nomineePair = (
   nomineeRole: "actor" | "other",
-  overrides: Omit<EventTemplate, "revision" | "roles" | "cooldown">,
+  overrides: PairOverrides,
 ): EventTemplate => ({
   ...pair(overrides),
   roles: [
@@ -42,7 +44,7 @@ export const eventTemplates: readonly EventTemplate[] = [
   leaderPair("other", { id: "challenge-resentment", category: "Conflito", tags: ["challenge"], windows: ["post_challenge"], baseScore: 30, title: "{actor} não engole o resultado contra {other}", description: "A derrota continua pesando mesmo depois do fim da prova.", effects: [{ type: "characterDelta", role: "actor", field: "condition.stress", delta: 7 }] }),
   leaderPair("actor", { id: "leader-lobbying", category: "Votação", tags: ["leader"], windows: ["post_challenge", "leader_reign", "campaign"], baseScore: 30, title: "{actor} ouve a aproximação de {other}", description: "A conversa mede riscos, lealdades e o novo poder do líder.", effects: [{ type: "relationshipDelta", fromRole: "actor", toRole: "other", field: "strategicAlignment", delta: 4 }] }),
   pair({ id: "party-unexpected-bond", category: "Festa", tags: ["party", "bond"], windows: ["party"], baseScore: 34, title: "{actor} e {other} se aproximam na festa", description: "Uma conversa inesperada atravessa a madrugada.", effects: [{ type: "relationshipDelta", fromRole: "actor", toRole: "other", field: "affinity", delta: 8 }] }),
-  pair({ id: "party-open-mic", category: "Festa", tags: ["party", "risk"], windows: ["party"], baseScore: 32, title: "O microfone entrega {actor} para {other}", description: "Um comentário que parecia privado muda o clima da festa.", effects: [{ type: "relationshipDelta", fromRole: "other", toRole: "actor", field: "resentment", delta: 9 }] }),
+  pair({ id: "party-open-mic", revision: 2, category: "Festa", tags: ["party", "risk"], windows: ["party"], baseScore: 32, title: "{actor} questiona o jogo de {other}, e a crítica circula", description: "Durante a festa, {actor} diz a outros participantes que desconfia das alianças de {other}. A conversa é repassada, e {other} descobre.", effects: [{ type: "relationshipDelta", fromRole: "other", toRole: "actor", field: "resentment", delta: 9 }] }),
   pair({ id: "triggered-confrontation", category: "Conflito", tags: ["trigger"], windows: ["party", "campaign", "post_nomination"], baseScore: 26, title: "{actor} confronta {other}", description: "A tensão acumulada vira uma conversa sem espaço para recuo.", effects: [{ type: "relationshipDelta", fromRole: "actor", toRole: "other", field: "rivalry", delta: 8 }] }),
   pair({ id: "mediation", category: "Convivência", tags: ["decompression"], windows: ["party", "campaign", "post_nomination"], baseScore: 18, title: "{actor} tenta mediar o conflito de {other}", description: "A intervenção reduz o tom e abre espaço para uma trégua.", effects: [{ type: "relationshipDelta", fromRole: "other", toRole: "actor", field: "respect", delta: 5 }] }),
   nomineePair("actor", { id: "nominee-confrontation", category: "Votação", tags: ["nominee"], windows: ["post_nomination"], baseScore: 35, title: "{actor} cobra explicações de {other}", description: "A berlinda transforma uma suspeita em cobrança aberta.", effects: [{ type: "relationshipDelta", fromRole: "actor", toRole: "other", field: "trust", delta: -8 }] }),
