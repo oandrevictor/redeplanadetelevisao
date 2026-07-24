@@ -1,17 +1,26 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { cast } from "@/game/content/cast";
+import { recordedEvents as extractedRecordedEvents } from "@/game/content/legacy-events";
+import {
+  introFeed as extractedIntroFeed,
+  partyFeed as extractedPartyFeed,
+} from "@/game/content/legacy-feed";
+import { reduceGame } from "@/game/reducer";
+import { selectAvailableFootage } from "@/game/selectors/episode-bank";
+import { toFootageView } from "@/game/selectors/event-view";
+import { selectFeedEvents } from "@/game/selectors/feed";
+import type {
+  ChallengeType as DomainChallengeType,
+  PersonalityTrait as DomainPersonalityTrait,
+  TraitScore as DomainTraitScore,
+} from "@/game/types";
+import { useGameEngine } from "./use-game-engine";
 
-type ChallengeType = "resistencia" | "sorte" | "atencao";
-type PersonalityTrait =
-  | "carisma"
-  | "estrategia"
-  | "impulsividade"
-  | "lealdade"
-  | "competitividade"
-  | "percepcaoSocial"
-  | "conscienciaDasCameras";
-type TraitScore = 1 | 2 | 3 | 4 | 5;
+type ChallengeType = DomainChallengeType;
+type PersonalityTrait = DomainPersonalityTrait;
+type TraitScore = DomainTraitScore;
 type AppView = "mail" | "feed" | "challenge" | "edit";
 type Theme = "light" | "dark";
 type Phase =
@@ -61,6 +70,9 @@ type RecordedEvent = {
   duration: number;
   heat: number;
   description: string;
+  actorIds?: string[];
+  occurredAtWeek?: number;
+  requiredAnchor?: boolean;
 };
 
 type CutTone = "neutro" | "engracado" | "triste" | "malicioso" | "conflituoso" | "emocional";
@@ -74,7 +86,7 @@ type TimelineItem =
   | { id: string; kind: "ad"; title: string; duration: 4 }
   | ({ kind: "event"; approach: CutApproach } & RecordedEvent);
 
-const participants: Participant[] = [
+const inlineParticipants: Participant[] = [
   {
     id: "dandara",
     name: "Dandara Moraes",
@@ -245,7 +257,11 @@ const participants: Participant[] = [
   },
 ];
 
-const recordedEvents: RecordedEvent[] = [
+const participants: Participant[] = process.env.NEXT_PUBLIC_LEGACY_CONTENT === "inline"
+  ? inlineParticipants
+  : cast.map(({ challengeTraits, ...profile }) => ({ ...profile, traits: challengeTraits }));
+
+const inlineRecordedEvents: RecordedEvent[] = [
   {
     id: "chegadas",
     title: "As primeiras chegadas",
@@ -360,6 +376,10 @@ const recordedEvents: RecordedEvent[] = [
   },
 ];
 
+const recordedEvents: RecordedEvent[] = process.env.NEXT_PUBLIC_LEGACY_CONTENT === "inline"
+  ? inlineRecordedEvents
+  : extractedRecordedEvents;
+
 const allParticipantIds = participants.map((participant) => participant.id);
 
 const eventParticipantIds: Record<string, string[]> = {
@@ -395,19 +415,22 @@ const adSlots: TimelineItem[] = [1, 2, 3, 4].map((number) => ({
   duration: 4 as const,
 }));
 
-const introFeed = [
+const inlineIntroFeed = [
   { time: "08:14", camera: "CAM 01 · SALA", title: "Dandara foi a primeira a entrar", body: "Ela já escolheu o sofá e está narrando a própria chegada." },
   { time: "08:26", camera: "CAM 04 · QUARTO", title: "Disputa silenciosa por camas", body: "Iago largou um tênis em cada cama. Celina anotou mentalmente." },
   { time: "09:02", camera: "CAM 07 · COZINHA", title: "Primeiro café, primeira faísca", body: "Bento usou o último filtro. Jussara chamou de crime federal." },
   { time: "09:41", camera: "CAM 03 · VARANDA", title: "Uma aliança começa a tomar forma", body: "Três participantes combinaram trocar informações antes da prova." },
 ];
 
-const partyFeed = [
+const inlinePartyFeed = [
   { time: "23:18", camera: "CAM 02 · PISTA", title: "Começou a Festa Sinal de Verão", body: "Luzes fluorescentes, pista molhada e figurinos que desafiam o sinal da TV." },
   { time: "00:07", camera: "CAM 06 · BAR", title: "Uma aproximação inesperada", body: "Duas pessoas que quase não conversavam passaram vinte minutos juntas no bar." },
   { time: "01:12", camera: "CAM 03 · VARANDA", title: "Comentário captado pelo microfone", body: "Uma crítica atravessou a festa e pode mudar os votos da casa." },
   { time: "02:36", camera: "CAM 05 · QUARTO", title: "Jussara encerra a noite com coreografia", body: "Até quem estava brigado apareceu para aprender o passinho." },
 ];
+
+const introFeed = process.env.NEXT_PUBLIC_LEGACY_CONTENT === "inline" ? inlineIntroFeed : extractedIntroFeed;
+const partyFeed = process.env.NEXT_PUBLIC_LEGACY_CONTENT === "inline" ? inlinePartyFeed : extractedPartyFeed;
 
 const FEED_REFRESH_MS = 3500;
 
@@ -472,6 +495,8 @@ function ThemeSwitch({ theme, onToggle }: { theme: Theme; onToggle: () => void }
 }
 
 export default function Home() {
+  const engineMode = process.env.NEXT_PUBLIC_EVENT_ENGINE_MODE === "legacy" ? "legacy" : "dynamic";
+  const [shadowGameState, dispatchGame, engineControls] = useGameEngine("rede-plana-dynamic-v1", engineMode);
   const [theme, setTheme] = useState<Theme>("light");
   const [started, setStarted] = useState(false);
   const [phase, setPhase] = useState<Phase>("email");
@@ -524,8 +549,35 @@ export default function Home() {
 
   const isEditPhase = phase === "editPremiere" || phase === "editVote" || phase === "editElimination" || phase === "editFinal";
   const isLivePhase = phase === "livePremiere" || phase === "liveVote" || phase === "liveElimination" || phase === "liveFinal";
+  const dynamicIntroFeed = useMemo(
+    () => selectFeedEvents(shadowGameState, "arrival", 1),
+    [shadowGameState],
+  );
+  const dynamicPartyFeed = useMemo(
+    () => selectFeedEvents(shadowGameState, "party", week),
+    [shadowGameState, week],
+  );
+  const generatedFootage = useMemo(
+    () => shadowGameState.house.eventHistory.map(toFootageView),
+    [shadowGameState],
+  );
+  const editorEventCatalog = useMemo<RecordedEvent[]>(
+    () => [...recordedEvents, ...generatedFootage],
+    [generatedFootage],
+  );
 
   const availableEvents = useMemo(() => {
+    const episodeKind =
+      phase === "editPremiere" ? "premiere"
+        : phase === "editVote" ? "vote"
+          : phase === "editElimination" ? "elimination"
+            : "final";
+    const selectedIds = new Set(timeline.filter((item) => item.kind === "event").map((item) => item.id));
+    const dynamicEvents = selectAvailableFootage(shadowGameState, {
+      week,
+      episodeKind,
+      excludedInstanceIds: selectedIds,
+    }).map(toFootageView);
     const ids =
       phase === "editPremiere"
         ? ["chegadas", "mala-trocada", "pacto-varanda", "cafe-sem-acucar", "prova-lider", "confessionario"]
@@ -535,15 +587,17 @@ export default function Home() {
             ? ["melhores-semana", "microfone-aberto", "indicacao-lider", "voto-casa", "despedida"]
             : ["melhores-semana", "festa-neon", "prova-lider", "discursos-final", "confessionario"];
 
-    const selectedIds = new Set(timeline.filter((item) => item.kind === "event").map((item) => item.id));
-    let events = recordedEvents.filter((event) => ids.includes(event.id) && !selectedIds.has(event.id));
+    const dynamicEpisode = phase === "editPremiere" || phase === "editVote";
+    let events: RecordedEvent[] = dynamicEpisode && shadowGameState.mode === "dynamic" && dynamicEvents.length >= 2
+      ? dynamicEvents
+      : recordedEvents.filter((event) => ids.includes(event.id) && !selectedIds.has(event.id));
     if (category !== "Todos") events = events.filter((event) => event.category === category);
     if (search.trim()) {
       const query = search.toLocaleLowerCase("pt-BR");
       events = events.filter((event) => `${event.title} ${event.description}`.toLocaleLowerCase("pt-BR").includes(query));
     }
     return sort === "duracao" ? [...events].sort((a, b) => a.duration - b.duration) : events;
-  }, [phase, timeline, category, search, sort]);
+  }, [phase, timeline, category, search, sort, shadowGameState, week]);
 
   const timelineDuration = timeline.reduce((sum, item) => sum + item.duration, 0);
   const eventCount = timeline.filter((item) => item.kind === "event").length;
@@ -585,16 +639,15 @@ export default function Home() {
 
   function confirmChallenge() {
     if (!challengeType) return;
-    const ranked = [...activeParticipants].sort((a, b) => {
-      const aScore = a.traits[challengeType] + ((participants.indexOf(a) + week) % 3) * 0.12;
-      const bScore = b.traits[challengeType] + ((participants.indexOf(b) + week) % 3) * 0.12;
-      return bScore - aScore;
-    });
-    setLeaderId(ranked[0]?.id ?? activeParticipants[0]?.id ?? null);
+    const command = { type: "CONFIRM_CHALLENGE", challengeType } as const;
+    const canonicalResult = reduceGame(shadowGameState, command);
+    dispatchGame(command);
+    setLeaderId(canonicalResult.state.competition.leaderId);
     startEdit("editPremiere");
   }
 
   function involvedIdsFor(event: RecordedEvent) {
+    if (event.actorIds?.length) return event.actorIds;
     const configuredIds = eventParticipantIds[event.id] ?? allParticipantIds;
     const activeInvolvedIds = configuredIds.filter((id) => activeIds.includes(id));
     return activeInvolvedIds.length > 0 ? activeInvolvedIds : activeIds;
@@ -686,7 +739,7 @@ export default function Home() {
   function dropOnTimeline(targetIndex?: number) {
     if (!dragged) return;
     if (dragged.source === "bank") {
-      const event = recordedEvents.find((item) => item.id === dragged.id);
+      const event = editorEventCatalog.find((item) => item.id === dragged.id);
       if (!event || timeline.some((item) => item.id === event.id)) return;
       setTimeline((current) => {
         const next = [...current];
@@ -715,6 +768,15 @@ export default function Home() {
       setEditorError("Inclua pelo menos dois acontecimentos antes de fechar o corte.");
       return;
     }
+    const knownEventIds = new Set(shadowGameState.house.eventHistory.map((event) => event.id));
+    const cuts = timeline
+      .filter((item): item is TimelineItem & { kind: "event" } => item.kind === "event" && knownEventIds.has(item.id))
+      .map((item) => ({
+        eventInstanceId: item.id,
+        perspectiveIds: item.approach.perspectiveIds,
+        tone: item.approach.tone,
+      }));
+    if (cuts.length > 0) dispatchGame({ type: "BROADCAST_EPISODE", cuts });
     setLiveProgress(0);
     if (phase === "editPremiere") setPhase("livePremiere");
     if (phase === "editVote") setPhase("liveVote");
@@ -738,7 +800,12 @@ export default function Home() {
       return;
     }
     if (phase === "liveVote") {
-      const nextNominees = buildNominees();
+      const command = { type: "FORM_NOMINATION" } as const;
+      const canonicalResult = reduceGame(shadowGameState, command);
+      const nextNominees = canonicalResult.diagnostic
+        ? buildNominees()
+        : canonicalResult.state.competition.nomineeIds;
+      if (!canonicalResult.diagnostic) dispatchGame(command);
       setNominees(nextNominees);
       setAudiencePick(null);
       setPhase("audienceVote");
@@ -746,6 +813,7 @@ export default function Home() {
     }
     if (phase === "liveElimination") {
       if (!audiencePick) return;
+      dispatchGame({ type: "RESOLVE_ELIMINATION", participantId: audiencePick });
       setLastEliminatedId(audiencePick);
       setActiveIds((current) => current.filter((id) => id !== audiencePick));
       setPhase("weekSummary");
@@ -783,7 +851,11 @@ export default function Home() {
       || phase === "editElimination"
       || phase === "liveElimination"
       || phase === "weekSummary";
-    const itemCount = partyPhase ? partyFeed.length : introFeed.length;
+    const generatedCount = partyPhase ? dynamicPartyFeed.length : dynamicIntroFeed.length;
+    const legacyCount = partyPhase ? partyFeed.length : introFeed.length;
+    const itemCount = engineControls.ready && shadowGameState.mode === "dynamic" && generatedCount > 0
+      ? generatedCount
+      : legacyCount;
     const currentCount = partyPhase ? partyCount : feedCount;
     if (currentCount >= itemCount) return;
 
@@ -795,7 +867,17 @@ export default function Home() {
       }
     }, FEED_REFRESH_MS);
     return () => window.clearTimeout(timeout);
-  }, [feedCount, partyCount, phase, view, windowOpen]);
+  }, [
+    dynamicIntroFeed.length,
+    dynamicPartyFeed.length,
+    engineControls.ready,
+    feedCount,
+    partyCount,
+    phase,
+    shadowGameState.mode,
+    view,
+    windowOpen,
+  ]);
 
   function confirmAudienceElimination() {
     if (!audiencePick) return;
@@ -803,6 +885,7 @@ export default function Home() {
   }
 
   function nextWeek() {
+    dispatchGame({ type: "ADVANCE_WEEK" });
     setWeek((current) => current + 1);
     setChallengeType(null);
     setLeaderId(null);
@@ -817,6 +900,7 @@ export default function Home() {
 
   function voteWinner() {
     if (!audiencePick) return;
+    dispatchGame({ type: "RESOLVE_FINAL", winnerId: audiencePick });
     setWinnerId(audiencePick);
     setPhase("winnerReveal");
   }
@@ -855,7 +939,11 @@ export default function Home() {
 
   function renderFeed() {
     const isParty = phase === "feedParty" || phase === "editVote" || phase === "liveVote" || phase === "audienceVote" || phase === "editElimination" || phase === "liveElimination" || phase === "weekSummary";
-    const items = isParty ? partyFeed : introFeed;
+    const generatedItems = isParty ? dynamicPartyFeed : dynamicIntroFeed;
+    const legacyItems = isParty ? partyFeed : introFeed;
+    const items = engineControls.ready && shadowGameState.mode === "dynamic" && generatedItems.length > 0
+      ? generatedItems
+      : legacyItems;
     const count = isParty ? partyCount : feedCount;
     const setCount = isParty ? setPartyCount : setFeedCount;
     return (
@@ -1131,7 +1219,7 @@ export default function Home() {
           <div className={`event-grid${week >= 2 ? " event-grid-approach" : ""}`}>
             {availableEvents.map((event) => (
               <article
-                className="event-card"
+                className={`event-card${event.requiredAnchor ? " is-required" : ""}`}
                 data-category={event.category}
                 draggable
                 key={event.id}
@@ -1139,7 +1227,7 @@ export default function Home() {
                 title={event.description}
               >
                 <div className="event-card-top">
-                  <span>{event.category}</span>
+                  <span>{event.requiredAnchor ? `${event.category} · OBRIGATÓRIO` : event.category}</span>
                   <b>{event.duration} min</b>
                 </div>
                 <h3>{event.title}</h3>
@@ -1280,6 +1368,7 @@ export default function Home() {
           <button
             className="button button-primary"
             onClick={() => {
+              dispatchGame({ type: "START_PARTY" });
               setPhase("feedParty");
               setView("feed");
               setWindowOpen(true);
@@ -1388,14 +1477,23 @@ export default function Home() {
             <div><span>EPISÓDIOS</span><b>{week * 3 + 1}</b></div>
             <div><span>MAIOR PICO</span><b>{predictedAudience + 9},7</b></div>
           </div>
-          <button className="button button-primary" onClick={() => window.location.reload()} type="button">Jogar novamente</button>
+          <button
+            className="button button-primary"
+            onClick={() => {
+              engineControls.resetSeason();
+              window.location.reload();
+            }}
+            type="button"
+          >
+            Jogar novamente
+          </button>
         </div>
       </main>
     );
   }
 
   return (
-    <main className={`computer-shell theme-${theme}`}>
+    <main className={`computer-shell theme-${theme}`} data-shadow-revision={shadowGameState.revision}>
       <div className="desktop-wallpaper" aria-hidden="true"><span>RPT</span><b>PRODUÇÃO<br />CASA VIGIADA</b></div>
       <aside className="desktop-icons" aria-label="Aplicativos">
         <AppIcon active={view === "mail"} label="Correio" onClick={() => { setView("mail"); setWindowOpen(true); }} symbol="✉" />
