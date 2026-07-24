@@ -462,7 +462,9 @@ export default function Home() {
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem("rede-plana-theme");
-    if (savedTheme === "dark" || savedTheme === "light") setTheme(savedTheme);
+    if (savedTheme !== "dark" && savedTheme !== "light") return;
+    const frame = window.requestAnimationFrame(() => setTheme(savedTheme));
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   function toggleTheme() {
