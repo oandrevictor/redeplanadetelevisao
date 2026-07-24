@@ -549,6 +549,7 @@ export default function Home() {
   const [lastEliminatedId, setLastEliminatedId] = useState<string | null>(null);
   const [winnerId, setWinnerId] = useState<string | null>(null);
   const [soundOn, setSoundOn] = useState(true);
+  const [startMenuOpen, setStartMenuOpen] = useState(false);
   const uiSaveReady = useRef(false);
 
   useEffect(() => {
@@ -638,6 +639,15 @@ export default function Home() {
     const frame = window.requestAnimationFrame(() => setTheme(savedTheme));
     return () => window.cancelAnimationFrame(frame);
   }, []);
+
+  useEffect(() => {
+    if (!startMenuOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setStartMenuOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [startMenuOpen]);
 
   function toggleTheme() {
     setTheme((current) => {
@@ -760,6 +770,16 @@ export default function Home() {
     setSort("gravacao");
     setEditorError("");
     setWindowOpen(true);
+  }
+
+  function restartSeason() {
+    const confirmed = window.confirm(
+      "Reiniciar a temporada? Todo o progresso salvo do jogo atual será apagado.",
+    );
+    if (!confirmed) return;
+    engineControls.resetSeason();
+    window.localStorage.removeItem(UI_SAVE_KEY);
+    window.location.reload();
   }
 
   function confirmChallenge() {
@@ -1622,11 +1642,7 @@ export default function Home() {
           </div>
           <button
             className="button button-primary"
-            onClick={() => {
-              engineControls.resetSeason();
-              window.localStorage.removeItem(UI_SAVE_KEY);
-              window.location.reload();
-            }}
+            onClick={restartSeason}
             type="button"
           >
             Jogar novamente
@@ -1677,8 +1693,38 @@ export default function Home() {
         </div>
       </aside>
 
+      {startMenuOpen && (
+        <section aria-label="Menu Iniciar" className="start-menu" id="start-menu" role="menu">
+          <header><span>RP</span><b>REDE PLANA</b></header>
+          <button
+            onClick={() => {
+              setWindowOpen(true);
+              setStartMenuOpen(false);
+            }}
+            role="menuitem"
+            type="button"
+          >
+            <span aria-hidden="true">▣</span>
+            <span><b>Continuar produção</b><small>Voltar à central do programa</small></span>
+          </button>
+          <button className="start-menu-reset" onClick={restartSeason} role="menuitem" type="button">
+            <span aria-hidden="true">↻</span>
+            <span><b>Reiniciar temporada</b><small>Apagar o progresso e começar de novo</small></span>
+          </button>
+        </section>
+      )}
+
       <footer className="taskbar">
-        <button className="task-start" type="button"><span>RP</span> INICIAR</button>
+        <button
+          aria-controls="start-menu"
+          aria-expanded={startMenuOpen}
+          aria-haspopup="menu"
+          className={`task-start${startMenuOpen ? " is-active" : ""}`}
+          onClick={() => setStartMenuOpen((current) => !current)}
+          type="button"
+        >
+          <span>RP</span> INICIAR
+        </button>
         <div className="task-running">
           <button onClick={() => setWindowOpen(true)} type="button">{view === "mail" ? "✉ Correio" : "▣ Central de Produção"}</button>
         </div>
