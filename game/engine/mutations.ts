@@ -24,6 +24,29 @@ export function applyEventEffects(state: GameState, effects: AppliedEffect[]): v
         id: effect.threadId, type: effect.threadType, actorIds: [...effect.actorIds],
         status: "open", progress: 0, openedAtTick: state.clock.tick,
       };
+      if (effect.threadType === "alliance") {
+        const memberIds = [...new Set(effect.actorIds)].sort();
+        const allianceId = `alliance-${memberIds.join("-")}`;
+        const existing = state.alliances[allianceId];
+        if (existing) {
+          existing.status = "active";
+          existing.cohesion = clamp(existing.cohesion + 10);
+        } else {
+          state.alliances[allianceId] = {
+            id: allianceId,
+            memberIds,
+            status: "active",
+            secrecy: 70,
+            cohesion: 55,
+          };
+        }
+      }
+    }
+    if (effect.type === "advanceThread") {
+      const thread = state.narrative.threads[effect.threadId];
+      if (!thread) continue;
+      thread.progress = clamp(thread.progress + effect.delta);
+      if (effect.resolve || thread.progress >= 100) thread.status = "resolved";
     }
     if (effect.type === "setFlag") {
       if (effect.participantId) state.characters[effect.participantId].flags[effect.key] = effect.value;

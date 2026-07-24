@@ -10,6 +10,8 @@ const replaceRoles = (copy: string, bindings: EventCandidate["bindings"]) =>
 
 export function instantiateEvent(state: GameState, candidate: EventCandidate): EventInstance {
   const sequence = state.house.eventHistory.length + 1;
+  const matchingThreads = Object.values(state.narrative.threads).filter((thread) =>
+    thread.status === "open" && candidate.actorIds.every((id) => thread.actorIds.includes(id)));
   const effects: AppliedEffect[] = candidate.template.effects.map((effect, effectIndex) => {
     if (effect.type === "characterDelta") {
       return { type: effect.type, participantId: candidate.bindings[effect.role][0], field: effect.field, delta: effect.delta };
@@ -27,12 +29,16 @@ export function instantiateEvent(state: GameState, candidate: EventCandidate): E
       actorIds: effect.roles.flatMap((role) => candidate.bindings[role]),
     };
   });
+  if (candidate.template.tags.includes("callback") && matchingThreads[0]) {
+    effects.push({ type: "advanceThread", threadId: matchingThreads[0].id, delta: 100, resolve: true });
+  }
   return {
     id: `event-${state.seasonId}-${state.clock.tick}-${sequence}`,
     templateId: candidate.template.id, templateRevision: candidate.template.revision, sequence,
     occurredAt: { ...state.clock }, window: state.clock.window,
     roleBindings: structuredClone(candidate.bindings), actorIds: [...candidate.actorIds],
-    sourceEventIds: [], sourceThreadIds: [],
+    sourceEventIds: [],
+    sourceThreadIds: candidate.template.tags.includes("callback") && matchingThreads[0] ? [matchingThreads[0].id] : [],
     title: replaceRoles(candidate.template.title, candidate.bindings),
     description: replaceRoles(candidate.template.description, candidate.bindings),
     category: candidate.template.category,

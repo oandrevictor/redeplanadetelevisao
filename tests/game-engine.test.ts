@@ -1,14 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateCast } from "../game/content/cast";
+import { cast, validateCast } from "../game/content/cast";
 import { eventTemplates } from "../game/content/templates/index";
+import { checkConstraints } from "../game/engine/constraints";
+import { enumerateCandidates } from "../game/engine/enumerate";
+import { instantiateEvent } from "../game/engine/instantiate";
+import { applyEventEffects } from "../game/engine/mutations";
 import { collectInvariantErrors } from "../game/invariants";
 import { deserializeSeason, serializeSeason } from "../game/persistence/serialization";
 import { reduceGame } from "../game/reducer";
 import { createRng, nextRandom } from "../game/rng";
 import { selectActiveCast } from "../game/selectors/active-cast";
 import { selectAvailableFootage } from "../game/selectors/episode-bank";
+import { selectAudienceForecast } from "../game/selectors/audience-forecast";
 import { selectFeedEvents } from "../game/selectors/feed";
+import { simulateSeasons } from "../game/simulator";
 import { createInitialState } from "../game/state";
 import type { ChallengeType, GameState } from "../game/types";
 
@@ -80,7 +86,14 @@ test("party templates stay in party windows and event ids are stable", () => {
   const state = playSeason("party-window");
   for (const event of state.house.eventHistory) {
     if (event.templateId.startsWith("anchor:")) {
-      assert.equal(event.window, "post_challenge");
+      const expectedWindow =
+        event.templateId === "anchor:challenge-result" ? "post_challenge"
+          : event.templateId === "anchor:nomination-result" || event.templateId === "anchor:house-ballot"
+            ? "post_nomination"
+            : event.templateId === "anchor:elimination-result" || event.templateId === "anchor:farewell"
+              ? "elimination"
+              : "final";
+      assert.equal(event.window, expectedWindow);
       continue;
     }
     const template = eventTemplates.find((item) => item.id === event.templateId);
@@ -143,4 +156,302 @@ test("serialized saves restore the exact event queue and RNG state", () => {
   assert.ok(restored);
   assert.deepEqual(restored.snapshot, state);
   assert.deepEqual(selectFeedEvents(restored.snapshot, "party", 1), selectFeedEvents(state, "party", 1));
+});
+
+test("challenge resolution records full standings and leader-specific reactions", () => {
+  let state = command(createInitialState("leadership", "dynamic"), { type: "START_SEASON", seed: "leadership" });
+  state = command(state, { type: "CONFIRM_CHALLENGE", challengeType: "resistencia" });
+  const result = state.competition.challengeHistory[0];
+  assert.equal(result.standings.length, selectActiveCast(state).length);
+  assert.equal(result.winnerId, state.competition.leaderId);
+  assert.deepEqual(
+    result.standings,
+    [...result.standings].sort((left, right) => right.score - left.score || left.participantId.localeCompare(right.participantId)),
+  );
+
+  const reactions = state.house.eventHistory.filter((event) => event.window === "post_challenge");
+  const celebration = reactions.find((event) => event.templateId === "challenge-celebration");
+  const resentment = reactions.find((event) => event.templateId === "challenge-resentment");
+  const lobbying = reactions.find((event) => event.templateId === "leader-lobbying");
+  assert.equal(celebration?.roleBindings.actor[0], result.winnerId);
+  assert.equal(resentment?.roleBindings.other[0], result.winnerId);
+  assert.equal(lobbying?.roleBindings.actor[0], result.winnerId);
+});
+
+test("challenge aptitude helps without making one contestant deterministic", () => {
+  const wins = new Map<string, number>();
+  let winnerTraitTotal = 0;
+  for (let index = 0; index < 250; index += 1) {
+    let state = command(createInitialState(`aptitude-${index}`, "dynamic"), {
+      type: "START_SEASON",
+      seed: `aptitude-${index}`,
+    });
+    state = command(state, { type: "CONFIRM_CHALLENGE", challengeType: "atencao" });
+    const winnerId = state.competition.leaderId!;
+    wins.set(winnerId, (wins.get(winnerId) ?? 0) + 1);
+    winnerTraitTotal += cast.find((profile) => profile.id === winnerId)!.challengeTraits.atencao;
+  }
+  assert.ok(winnerTraitTotal / 250 > 4);
+  assert.ok(wins.size > 1);
+  assert.ok(Math.max(...wins.values()) < 250);
+});
+
+test("later challenge episodes exclude premiere arrival footage", () => {
+  const state = playSeason("weekly-challenge");
+  const weekTwo = selectAvailableFootage(state, { week: 2, episodeKind: "challenge" });
+  assert.ok(weekTwo.length >= 4);
+  assert.ok(weekTwo.every((event) => event.occurredAt.week === 2 && event.window === "post_challenge"));
+  assert.ok(weekTwo.some((event) => event.templateId === "anchor:challenge-result"));
+});
+
+test("nominations store individual relationship-driven ballots and editable motives", () => {
+  let state = command(createInitialState("ballots", "dynamic"), { type: "START_SEASON", seed: "ballots" });
+  state = command(state, { type: "CONFIRM_CHALLENGE", challengeType: "sorte" });
+  state = command(state, { type: "FORM_NOMINATION" });
+  const nomination = state.competition.nominationHistory[0];
+  assert.ok(nomination);
+  assert.notEqual(nomination.leaderId, nomination.leaderTargetId);
+  assert.notEqual(nomination.leaderId, nomination.houseTargetId);
+  assert.equal(new Set(state.competition.nomineeIds).size, 2);
+  assert.equal(nomination.ballots.length, selectActiveCast(state).length - 1);
+  for (const ballot of nomination.ballots) {
+    assert.notEqual(ballot.voterId, ballot.targetId);
+    assert.notEqual(ballot.targetId, nomination.leaderId);
+    assert.notEqual(ballot.targetId, nomination.leaderTargetId);
+    assert.ok(ballot.motiveTags.length > 0);
+  }
+  assert.equal(
+    Object.values(nomination.totals).reduce((sum, total) => sum + total, 0),
+    nomination.ballots.length,
+  );
+  const ballotFootage = selectAvailableFootage(state, { week: 1, episodeKind: "elimination" })
+    .filter((event) => event.templateId === "anchor:house-ballot");
+  assert.equal(ballotFootage.length, nomination.ballots.length);
+});
+
+test("changing a leader relationship changes the nomination target", () => {
+  let base = command(createInitialState("relationship-vote", "dynamic"), {
+    type: "START_SEASON",
+    seed: "relationship-vote",
+  });
+  base = command(base, { type: "CONFIRM_CHALLENGE", challengeType: "resistencia" });
+  const leaderId = base.competition.leaderId!;
+  const targets = selectActiveCast(base).filter((id) => id !== leaderId);
+  const altered = structuredClone(base);
+  for (const id of targets) {
+    const relationship = altered.relationships[`${leaderId}>${id}`];
+    relationship.trust = 100;
+    relationship.affinity = 100;
+    relationship.rivalry = 0;
+    relationship.resentment = 0;
+    altered.characters[id].game.perceivedThreat = 0;
+  }
+  const forcedTarget = targets.at(-1)!;
+  const forcedRelationship = altered.relationships[`${leaderId}>${forcedTarget}`];
+  forcedRelationship.trust = 0;
+  forcedRelationship.affinity = 0;
+  forcedRelationship.rivalry = 100;
+  forcedRelationship.resentment = 100;
+  altered.characters[forcedTarget].game.perceivedThreat = 100;
+  const nominated = command(altered, { type: "FORM_NOMINATION" });
+  assert.equal(nominated.competition.nominationHistory[0].leaderTargetId, forcedTarget);
+});
+
+test("elimination is immutable, resolves impossible threads, and preserves farewell footage", () => {
+  let state = command(createInitialState("aftermath", "dynamic"), { type: "START_SEASON", seed: "aftermath" });
+  state = command(state, { type: "CONFIRM_CHALLENGE", challengeType: "atencao" });
+  state = command(state, { type: "FORM_NOMINATION" });
+  const eliminatedId = state.competition.nomineeIds[0];
+  state.narrative.threads.manual = {
+    id: "manual",
+    type: "promise",
+    actorIds: [eliminatedId, state.competition.nomineeIds[1]],
+    status: "open",
+    progress: 20,
+    openedAtTick: state.clock.tick,
+  };
+  state = command(state, { type: "RESOLVE_ELIMINATION", participantId: eliminatedId });
+  assert.equal(state.characters[eliminatedId].status, "eliminated");
+  assert.equal(state.competition.eliminationHistory[0].eliminatedId, eliminatedId);
+  assert.equal(state.narrative.threads.manual.status, "resolved");
+  const farewellIndex = state.house.eventHistory.findIndex((event) => event.templateId === "anchor:farewell");
+  assert.ok(farewellIndex >= 0);
+  assert.ok(state.house.eventHistory[farewellIndex].actorIds.includes(eliminatedId));
+  assert.ok(state.house.eventHistory.slice(farewellIndex + 1).every((event) => !event.actorIds.includes(eliminatedId)));
+  const duplicate = reduceGame(state, { type: "RESOLVE_ELIMINATION", participantId: eliminatedId });
+  assert.ok(duplicate.diagnostic);
+});
+
+test("the third elimination transitions all survivors to finalists", () => {
+  const state = (() => {
+    let current = command(createInitialState("final-transition", "dynamic"), {
+      type: "START_SEASON",
+      seed: "final-transition",
+    });
+    let week = 0;
+    while (selectActiveCast(current).length > 3) {
+      current = command(current, { type: "CONFIRM_CHALLENGE", challengeType: ["resistencia", "sorte", "atencao"][week % 3] as ChallengeType });
+      current = command(current, { type: "FORM_NOMINATION" });
+      current = command(current, { type: "RESOLVE_ELIMINATION", participantId: current.competition.nomineeIds[0] });
+      if (selectActiveCast(current).length > 3) current = command(current, { type: "ADVANCE_WEEK" });
+      week += 1;
+    }
+    return current;
+  })();
+  assert.equal(state.clock.window, "final");
+  assert.equal(Object.values(state.characters).filter((character) => character.status === "finalist").length, 3);
+});
+
+test("editorial framing changes public opinion without mutating house truth", () => {
+  const state = command(createInitialState("editorial", "dynamic"), { type: "START_SEASON", seed: "editorial" });
+  const event = state.house.eventHistory[0];
+  const relationshipsBefore = structuredClone(state.relationships);
+  const emotional = command(state, {
+    type: "BROADCAST_EPISODE",
+    cuts: [{ eventInstanceId: event.id, perspectiveIds: [event.actorIds[0]], tone: "emocional" }],
+  });
+  const malicious = command(state, {
+    type: "BROADCAST_EPISODE",
+    cuts: [{ eventInstanceId: event.id, perspectiveIds: [event.actorIds[0]], tone: "malicioso" }],
+  });
+  assert.notDeepEqual(emotional.characters[event.actorIds[0]].audience, malicious.characters[event.actorIds[0]].audience);
+  assert.deepEqual(emotional.relationships, relationshipsBefore);
+  assert.deepEqual(malicious.relationships, relationshipsBefore);
+  assert.ok(Object.values(emotional.characters).every((character) =>
+    Object.values(character.audience).every((value) => value >= 0 && value <= 100)));
+  assert.notEqual(
+    emotional.broadcasts[0].audienceForecast,
+    undefined,
+  );
+});
+
+test("repeated editorial exposure has diminishing returns", () => {
+  let state = command(createInitialState("diminishing", "dynamic"), { type: "START_SEASON", seed: "diminishing" });
+  const event = state.house.eventHistory[0];
+  const cut = { eventInstanceId: event.id, perspectiveIds: [event.actorIds[0]], tone: "emocional" } as const;
+  const initialSupport = state.characters[event.actorIds[0]].audience.support;
+  state = command(state, { type: "BROADCAST_EPISODE", cuts: [cut] });
+  const firstGain = state.characters[event.actorIds[0]].audience.support - initialSupport;
+  const afterFirst = state.characters[event.actorIds[0]].audience.support;
+  state = command(state, { type: "BROADCAST_EPISODE", cuts: [cut] });
+  const secondGain = state.characters[event.actorIds[0]].audience.support - afterFirst;
+  assert.ok(secondGain < firstGain);
+  assert.ok(selectAudienceForecast(state, [cut]).points >= 10);
+});
+
+test("versioned saves preserve action logs and migrate schema version one", () => {
+  const state = command(createInitialState("migration", "dynamic"), { type: "START_SEASON", seed: "migration" });
+  const actionLog = [{ type: "START_SEASON", seed: "migration" }] as const;
+  const saved = deserializeSeason(serializeSeason(state, [...actionLog]));
+  assert.deepEqual(saved?.actionLog, actionLog);
+
+  const legacy = JSON.parse(serializeSeason(state, [...actionLog]));
+  legacy.schemaVersion = 1;
+  legacy.snapshot.schemaVersion = 1;
+  legacy.engineVersion = "0.1.0";
+  legacy.catalogVersion = "0.1.0";
+  legacy.snapshot.engineVersion = "0.1.0";
+  legacy.snapshot.catalogVersion = "0.1.0";
+  delete legacy.snapshot.competition.nominationHistory;
+  delete legacy.snapshot.competition.eliminationHistory;
+  delete legacy.snapshot.narrative.publicStorylines;
+  const migrated = deserializeSeason(JSON.stringify(legacy));
+  assert.equal(migrated?.schemaVersion, 2);
+  assert.deepEqual(migrated?.snapshot.competition.nominationHistory, []);
+  assert.deepEqual(migrated?.snapshot.narrative.publicStorylines, {});
+});
+
+test("headless simulator completes without deadlocks or invariant failures", () => {
+  const report = simulateSeasons(40);
+  assert.equal(report.completed, 40);
+  assert.equal(report.deadlocks, 0);
+  assert.equal(report.invariantFailures, 0);
+  assert.ok(report.commandLatencyP95Ms < 25);
+  assert.ok(Object.keys(report.templateFrequency).length > 10);
+  assert.ok(Object.keys(report.leadershipDistribution).length > 1);
+});
+
+test("callbacks require and resolve a real earlier story thread", () => {
+  const state = createInitialState("callback", "dynamic");
+  state.clock.window = "campaign";
+  state.narrative.threads.promise = {
+    id: "promise",
+    type: "promise",
+    actorIds: ["dandara", "bento"],
+    status: "open",
+    progress: 0,
+    openedAtTick: 0,
+  };
+  const candidate = enumerateCandidates(state, eventTemplates).find((item) =>
+    item.template.id === "promise-exposed"
+    && item.actorIds[0] === "dandara"
+    && item.actorIds[1] === "bento");
+  assert.ok(candidate);
+  assert.equal(checkConstraints(state, candidate).accepted, true);
+  const event = instantiateEvent(state, candidate);
+  assert.deepEqual(event.sourceThreadIds, ["promise"]);
+  applyEventEffects(state, event.effects);
+  assert.equal(state.narrative.threads.promise.status, "resolved");
+
+  delete state.narrative.threads.promise;
+  assert.equal(checkConstraints(state, candidate).accepted, false);
+});
+
+test("action logs replay canonical mechanics exactly", () => {
+  const seed = "replay";
+  const actionLog = [
+    { type: "START_SEASON", seed },
+    { type: "CONFIRM_CHALLENGE", challengeType: "sorte" },
+    { type: "START_PARTY" },
+    { type: "FORM_NOMINATION" },
+  ] as const;
+  const replay = () => {
+    let state = createInitialState(seed, "dynamic");
+    for (const replayCommand of actionLog) state = command(state, replayCommand);
+    return state;
+  };
+  assert.deepEqual(replay(), replay());
+});
+
+test("future save versions fail safely and normal saves stay compact", () => {
+  const state = playSeason("save-size");
+  const started = performance.now();
+  const serialized = serializeSeason(state, [{ type: "START_SEASON", seed: "save-size" }]);
+  const elapsed = performance.now() - started;
+  assert.ok(new TextEncoder().encode(serialized).byteLength < 5_000_000);
+  assert.ok(elapsed < 100);
+
+  const future = JSON.parse(serialized);
+  future.schemaVersion = 999;
+  future.snapshot.schemaVersion = 999;
+  const before = JSON.stringify(future);
+  assert.equal(deserializeSeason(before), null);
+  assert.equal(JSON.stringify(future), before);
+});
+
+test("final editor receives speeches and retrospective footage", () => {
+  const state = (() => {
+    let current = command(createInitialState("final-footage", "dynamic"), {
+      type: "START_SEASON",
+      seed: "final-footage",
+    });
+    let week = 0;
+    while (selectActiveCast(current).length > 3) {
+      current = command(current, {
+        type: "CONFIRM_CHALLENGE",
+        challengeType: ["resistencia", "sorte", "atencao"][week % 3] as ChallengeType,
+      });
+      current = command(current, { type: "FORM_NOMINATION" });
+      current = command(current, {
+        type: "RESOLVE_ELIMINATION",
+        participantId: current.competition.nomineeIds[0],
+      });
+      if (selectActiveCast(current).length > 3) current = command(current, { type: "ADVANCE_WEEK" });
+      week += 1;
+    }
+    return current;
+  })();
+  const footage = selectAvailableFootage(state, { week: state.clock.week, episodeKind: "final" });
+  assert.equal(footage.filter((event) => event.templateId === "anchor:finalist-speech").length, 3);
+  assert.ok(footage.some((event) => event.templateId === "anchor:season-retrospective"));
 });
