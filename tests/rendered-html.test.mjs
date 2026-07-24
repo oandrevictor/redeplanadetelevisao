@@ -75,6 +75,8 @@ test("source contains the complete playable season loop", async () => {
   assert.match(page, /activeParticipants\.length === 3/);
   assert.match(css, /prefers-reduced-motion/);
   assert.match(css, /\.computer-shell \.feed-entry > div:not\(\.feed-line\)/);
+  assert.match(css, /transparent 0 7px,\s*rgba\(0, 0, 0, \.07\) 8px,\s*transparent 9px/);
+  assert.match(css, /transform:\s*scale\(1\.35\)/);
   assert.doesNotMatch(css, /grid-template-columns:\s*58px 0 minmax\(0,\s*1fr\) 26px/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
 });

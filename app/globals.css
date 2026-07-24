@@ -2692,15 +2692,14 @@ select:focus-visible {
 
 .theme-light::before,
 .theme-dark::before {
-  opacity: .23;
+  opacity: .12;
   background:
-    repeating-linear-gradient(0deg, transparent 0 2px, rgba(0, 0, 0, .14) 3px, transparent 4px),
-    repeating-linear-gradient(90deg, rgba(255, 0, 0, .02) 0 1px, rgba(0, 255, 255, .015) 1px 3px);
+    repeating-linear-gradient(90deg, rgba(255, 0, 0, .018) 0 1px, rgba(0, 255, 255, .012) 1px 4px);
   mix-blend-mode: multiply;
 }
 
 .theme-dark::before {
-  opacity: .46;
+  opacity: .18;
   mix-blend-mode: screen;
 }
 
@@ -3261,7 +3260,7 @@ select:focus-visible {
     inset 0 0 22px rgba(255, 255, 255, .06);
   background:
     radial-gradient(ellipse at center, transparent 58%, rgba(0, 0, 0, .32)),
-    repeating-linear-gradient(0deg, transparent 0 3px, rgba(0,0,0,.08) 4px);
+    repeating-linear-gradient(0deg, transparent 0 7px, rgba(0, 0, 0, .07) 8px, transparent 9px);
 }
 
 @media (max-width: 980px) {
@@ -4154,4 +4153,57 @@ select:focus-visible {
 .computer-shell .feed-auto-status.is-active::before {
   background: #20a56b;
   animation: blink 1.4s steps(1) infinite;
+}
+
+/* Larger desktop presentation without compromising the compact/mobile layouts. */
+
+@media (min-width: 1200px) {
+  .computer-shell .app-window {
+    left: 135px;
+    top: 26px;
+    width: min(1180px, calc((100vw - 185px) / 1.25));
+    height: calc((100svh - 88px) / 1.25);
+    min-height: 0;
+    transform: scale(1.25);
+    transform-origin: top left;
+  }
+
+  .computer-shell .app-mail {
+    width: min(930px, calc((100vw - 185px) / 1.25));
+  }
+
+  .computer-shell .desktop-icons {
+    transform: scale(1.15);
+    transform-origin: top left;
+  }
+
+  .computer-shell .guide-bubble {
+    transform: scale(1.1);
+    transform-origin: bottom right;
+  }
+
+  .computer-shell .taskbar {
+    height: 52px;
+    grid-template-columns: 124px 1fr auto;
+  }
+}
+
+@media (min-width: 1700px) {
+  .computer-shell .app-window {
+    width: min(1280px, calc((100vw - 185px) / 1.35));
+    height: calc((100svh - 92px) / 1.35);
+    transform: scale(1.35);
+  }
+
+  .computer-shell .app-mail {
+    width: min(1020px, calc((100vw - 185px) / 1.35));
+  }
+
+  .computer-shell .desktop-icons {
+    transform: scale(1.25);
+  }
+
+  .computer-shell .guide-bubble {
+    transform: scale(1.16);
+  }
 }
