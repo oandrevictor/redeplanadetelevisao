@@ -26,6 +26,7 @@ export function useSeasonSave() {
 
   const clear = useCallback(() => {
     window.localStorage.removeItem(SAVE_KEY);
+    window.localStorage.removeItem(FAILED_SAVE_BACKUP_KEY);
   }, []);
 
   return { load, save, clear };

@@ -3918,6 +3918,98 @@ select:focus-visible {
   font: 11px Tahoma, Arial, sans-serif;
 }
 
+.computer-shell .task-start.is-active {
+  box-shadow: inset 1px 1px 0 var(--chrome-shadow), inset -1px -1px 0 var(--chrome-hi);
+}
+
+.computer-shell .start-menu {
+  position: absolute;
+  z-index: 31;
+  bottom: 42px;
+  left: 4px;
+  width: min(310px, calc(100vw - 8px));
+  padding: 3px;
+  border: 1px solid var(--chrome-dark);
+  background: var(--chrome);
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-hi),
+    inset -1px -1px 0 var(--chrome-shadow),
+    3px 3px 0 rgb(0 0 0 / 28%);
+  color: var(--ui-text);
+  font-family: Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .start-menu header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 5px 8px;
+  background: linear-gradient(90deg, var(--title-a), var(--title-b));
+  color: #fff;
+  font-size: 12px;
+  letter-spacing: .08em;
+}
+
+.computer-shell .start-menu header span {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgb(255 255 255 / 55%);
+  font-weight: 900;
+}
+
+.computer-shell .start-menu > button {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 8px;
+  width: 100%;
+  min-height: 52px;
+  padding: 7px 9px;
+  border: 0;
+  background: transparent;
+  color: var(--ui-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.computer-shell .start-menu > button:hover,
+.computer-shell .start-menu > button:focus-visible {
+  outline: 0;
+  background: var(--title-a);
+  color: #fff;
+}
+
+.computer-shell .start-menu > button > span:first-child {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--chrome-shadow);
+  background: var(--panel);
+  color: var(--ui-text);
+  font: 900 20px Georgia, serif;
+}
+
+.computer-shell .start-menu > button > span:last-child {
+  display: grid;
+  gap: 3px;
+}
+
+.computer-shell .start-menu b {
+  font-size: 11px;
+}
+
+.computer-shell .start-menu small {
+  font-size: 9px;
+  opacity: .78;
+}
+
+.computer-shell .start-menu-reset {
+  border-top: 1px solid var(--chrome-shadow) !important;
+}
+
 .computer-shell .task-running button {
   height: 32px;
   border: 0;
