@@ -409,6 +409,8 @@ const partyFeed = [
   { time: "02:36", camera: "CAM 05 · QUARTO", title: "Jussara encerra a noite com coreografia", body: "Até quem estava brigado apareceu para aprender o passinho." },
 ];
 
+const FEED_REFRESH_MS = 3500;
+
 function Avatar({
   participant,
   size = "medium",
@@ -771,6 +773,30 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLivePhase, liveProgress, phase]);
 
+  useEffect(() => {
+    if (view !== "feed" || !windowOpen) return;
+    const partyPhase =
+      phase === "feedParty"
+      || phase === "editVote"
+      || phase === "liveVote"
+      || phase === "audienceVote"
+      || phase === "editElimination"
+      || phase === "liveElimination"
+      || phase === "weekSummary";
+    const itemCount = partyPhase ? partyFeed.length : introFeed.length;
+    const currentCount = partyPhase ? partyCount : feedCount;
+    if (currentCount >= itemCount) return;
+
+    const timeout = window.setTimeout(() => {
+      if (partyPhase) {
+        setPartyCount((current) => Math.min(itemCount, current + 1));
+      } else {
+        setFeedCount((current) => Math.min(itemCount, current + 1));
+      }
+    }, FEED_REFRESH_MS);
+    return () => window.clearTimeout(timeout);
+  }, [feedCount, partyCount, phase, view, windowOpen]);
+
   function confirmAudienceElimination() {
     if (!audiencePick) return;
     startEdit("editElimination");
@@ -891,7 +917,9 @@ export default function Home() {
               Definir primeira prova do líder
             </button>
           )}
-          <span className="status-note">{count}/{items.length} registros recebidos</span>
+          <span className={`status-note feed-auto-status${count < items.length ? " is-active" : ""}`}>
+            {count}/{items.length} registros recebidos · {count < items.length ? "atualização automática ativa" : "feed sincronizado"}
+          </span>
         </div>
       </div>
     );

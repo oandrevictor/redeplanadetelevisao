@@ -4135,3 +4135,23 @@ select:focus-visible {
     display: none;
   }
 }
+
+.computer-shell .feed-auto-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.computer-shell .feed-auto-status::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--chrome-shadow);
+  background: var(--ui-muted);
+  box-shadow: inset 1px 1px 0 var(--chrome-hi);
+}
+
+.computer-shell .feed-auto-status.is-active::before {
+  background: #20a56b;
+  animation: blink 1.4s steps(1) infinite;
+}

@@ -67,6 +67,8 @@ test("source contains the complete playable season loop", async () => {
   assert.match(page, /Todos os lados/);
   assert.match(page, /Engraçado/);
   assert.match(page, /Conflituoso/);
+  assert.match(page, /const FEED_REFRESH_MS = 3500/);
+  assert.match(page, /atualização automática ativa/);
   assert.doesNotMatch(page, /Maior potencial|>potencial</i);
   assert.match(page, /Quem deve sair\?/);
   assert.match(page, /Quem deve vencer\?/);
