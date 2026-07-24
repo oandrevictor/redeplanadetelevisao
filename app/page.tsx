@@ -1252,20 +1252,39 @@ export default function Home() {
       {pdfOpen && (
         <div className="modal-backdrop" role="presentation">
           <section aria-label="Participantes do programa" aria-modal="true" className="pdf-window" role="dialog">
-            <header>
-              <div><span className="pdf-icon mini">PDF</span><div><b>Participantes.pdf</b><small>DOSSIÊ CONFIDENCIAL · 6 PÁGINAS</small></div></div>
-              <button aria-label="Fechar dossiê" onClick={() => setPdfOpen(false)} type="button">×</button>
+            <header className="pdf-titlebar">
+              <div className="pdf-title">
+                <span className="pdf-title-icon" aria-hidden="true">▤</span>
+                <b>Participantes.pdf — Visualizador de documentos RPT</b>
+              </div>
+              <div className="pdf-window-buttons" aria-label="Controles da janela">
+                <button aria-label="Minimizar" disabled type="button">—</button>
+                <button aria-label="Maximizar" disabled type="button">□</button>
+                <button aria-label="Fechar dossiê" onClick={() => setPdfOpen(false)} type="button">×</button>
+              </div>
             </header>
+            <div className="pdf-toolbar">
+              <nav aria-label="Menu do visualizador">
+                <span><u>A</u>rquivo</span>
+                <span><u>E</u>ditar</span>
+                <span>E<u>x</u>ibir</span>
+                <span><u>A</u>juda</span>
+              </nav>
+              <div className="pdf-toolbar-status">
+                <span>PÁGINA 1 / 6</span>
+                <span>100%</span>
+              </div>
+            </div>
             <div className="pdf-paper">
               <div className="pdf-heading">
-                <span>REDE PLANA DE TELEVISÃO · DIRETORIA DE ELENCO</span>
+                <span>REDE PLANA DE TELEVISÃO · DIRETORIA DE ELENCO · DOCUMENTO INTERNO</span>
                 <h2>CASA VIGIADA</h2>
-                <p>Participantes selecionados // temporada 01</p>
+                <p>FICHA DE ELENCO · TEMPORADA 01</p>
               </div>
               <div className="cast-grid">
                 {participants.map((participant, index) => (
                   <article className="cast-card" key={participant.id}>
-                    <div className="cast-number">{String(index + 1).padStart(2, "0")}</div>
+                    <div className="cast-number">REG {String(index + 1).padStart(2, "0")}</div>
                     <Avatar participant={participant} />
                     <div className="cast-card-copy">
                       <span>{participant.age} ANOS · {participant.city}</span>
@@ -1282,8 +1301,13 @@ export default function Home() {
                   </article>
                 ))}
               </div>
-              <div className="pdf-stamp">APROVADO<br />DIRETORIA</div>
+              <div className="pdf-stamp">USO INTERNO<br />RPT · 01</div>
             </div>
+            <footer className="pdf-statusbar">
+              <span>Documento verificado</span>
+              <span>3,2 MB</span>
+              <span>Pronto</span>
+            </footer>
           </section>
         </div>
       )}

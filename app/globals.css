@@ -3303,3 +3303,665 @@ select:focus-visible {
     margin: -38px -12px 22px;
   }
 }
+
+/* Interface consistency pass — one workstation, one component language */
+
+.theme-light {
+  --document-paper: #f6f3e9;
+  --document-rule: #c4c0b5;
+  --document-ink: #181818;
+  --selection-bg: #071a78;
+  --selection-text: #ffffff;
+}
+
+.theme-dark {
+  --document-paper: #101a2d;
+  --document-rule: #30435d;
+  --document-ink: #d5f7ff;
+  --selection-bg: #2459a2;
+  --selection-text: #ffffff;
+}
+
+.computer-shell .eyebrow {
+  color: var(--accent);
+  font: 700 8px/1.2 "Courier New", monospace;
+  letter-spacing: .13em;
+}
+
+.computer-shell .mail-app,
+.computer-shell .feed-panel,
+.computer-shell .challenge-panel,
+.computer-shell .editor-panel {
+  font-family: Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .feed-panel,
+.computer-shell .challenge-panel,
+.computer-shell .editor-panel {
+  padding: 14px 16px 24px;
+}
+
+.computer-shell .feed-toolbar,
+.computer-shell .challenge-heading,
+.computer-shell .editor-heading {
+  align-items: center;
+  min-height: 66px;
+  padding: 9px 11px;
+  border: 0;
+  background: var(--surface-alt);
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-hi),
+    inset -1px -1px 0 var(--chrome-shadow);
+}
+
+.computer-shell .feed-toolbar h2,
+.computer-shell .challenge-heading h2,
+.computer-shell .editor-heading h2 {
+  margin-top: 3px;
+  font: 700 clamp(20px, 2.5vw, 28px)/1 Tahoma, Arial, sans-serif;
+  letter-spacing: -.02em;
+}
+
+.computer-shell .live-chip {
+  padding: 6px 9px;
+  border: 0;
+  background: #c62f36;
+  box-shadow: inset 1px 1px 0 #ff8b90, inset -1px -1px 0 #641318;
+  font: 700 8px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .camera-strip {
+  gap: 5px;
+  margin: 9px 0;
+}
+
+.computer-shell .camera-thumb {
+  height: 88px;
+  padding: 5px;
+  border: 1px solid var(--chrome-dark);
+  box-shadow: inset 1px 1px 0 #071016, inset -1px -1px 0 var(--chrome-hi);
+}
+
+.computer-shell .camera-thumb b {
+  left: 5px;
+  bottom: 4px;
+  font: 700 8px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .feed-log {
+  min-height: 0;
+  border: 1px solid var(--chrome-shadow);
+  background: var(--surface);
+  box-shadow: inset 1px 1px 0 var(--chrome-dark), inset -1px -1px 0 var(--chrome-hi);
+}
+
+.computer-shell .feed-entry {
+  grid-template-columns: 58px 0 minmax(0, 1fr) 26px;
+  gap: 6px;
+  min-height: 67px;
+  padding: 9px 10px;
+  border-color: var(--document-rule);
+  background: var(--surface);
+}
+
+.computer-shell .feed-entry:nth-child(even) {
+  background: var(--surface-alt);
+}
+
+.computer-shell .feed-entry time {
+  font: 700 11px "Courier New", monospace;
+}
+
+.computer-shell .feed-line {
+  display: none;
+}
+
+.computer-shell .feed-entry h3 {
+  margin: 2px 0;
+  font: 700 14px/1.2 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .feed-entry p {
+  font: 10px/1.35 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .feed-entry > strong {
+  color: var(--ui-muted);
+  font: 700 11px "Courier New", monospace;
+}
+
+.computer-shell .panel-actions {
+  gap: 13px;
+  margin-top: 13px;
+}
+
+.computer-shell .challenge-heading p {
+  margin-top: 5px;
+  font-size: 10px;
+}
+
+.computer-shell .date-card,
+.computer-shell .runtime {
+  min-width: 95px;
+  padding: 6px 8px;
+  border: 0;
+  background: var(--surface);
+  color: var(--ui-text);
+  box-shadow: inset 1px 1px 0 var(--chrome-shadow), inset -1px -1px 0 var(--chrome-hi);
+}
+
+.computer-shell .challenge-types {
+  gap: 7px;
+  margin: 9px 0;
+}
+
+.computer-shell .challenge-type {
+  min-height: 76px;
+  grid-template-columns: 35px 1fr;
+  column-gap: 9px;
+  padding: 9px;
+  border: 0;
+  background: var(--chrome);
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-hi),
+    inset -1px -1px 0 var(--chrome-dark),
+    inset 2px 2px 0 var(--chrome-mid),
+    inset -2px -2px 0 var(--chrome-shadow);
+}
+
+.computer-shell .challenge-type > span {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--chrome-shadow);
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 19px;
+}
+
+.computer-shell .challenge-type b {
+  font: 700 14px/1 Tahoma, Arial, sans-serif;
+  letter-spacing: 0;
+}
+
+.computer-shell .challenge-type small {
+  color: var(--ui-muted);
+  font: 9px/1.2 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .challenge-type.is-selected {
+  background: var(--selection-bg);
+  color: var(--selection-text);
+  box-shadow:
+    inset 1px 1px 0 #89a6d4,
+    inset -1px -1px 0 #000;
+}
+
+.computer-shell .challenge-type.is-selected::after {
+  right: 6px;
+  top: 5px;
+  color: #fff;
+  font-size: 6px;
+}
+
+.computer-shell .challenge-cast {
+  gap: 7px;
+}
+
+.computer-shell .cast-card.compact {
+  min-height: 75px;
+  grid-template-columns: 62px minmax(0, 1fr);
+  gap: 8px;
+  padding: 5px;
+}
+
+.computer-shell .compact .avatar-medium {
+  width: 62px;
+  height: 68px;
+  border: 1px solid var(--chrome-dark);
+}
+
+.computer-shell .compact .cast-card-copy {
+  padding-top: 15px;
+}
+
+.computer-shell .compact .cast-card-copy h3 {
+  margin: 2px 0;
+  font-size: 13px;
+}
+
+.computer-shell .compact .cast-card-copy p {
+  margin: 2px 0 6px;
+  font-size: 8px;
+}
+
+.computer-shell .standing {
+  padding: 2px 4px;
+  background: var(--surface);
+  color: var(--ui-muted) !important;
+  font-size: 6px !important;
+}
+
+.computer-shell .trait-meter {
+  height: 4px;
+  background: var(--document-rule);
+}
+
+.computer-shell .trait-meter i,
+.computer-shell .heat-row i {
+  background: var(--accent);
+}
+
+.computer-shell .editor-panel {
+  padding-bottom: 70px;
+}
+
+.computer-shell .timeline-section,
+.computer-shell .event-bank {
+  margin-top: 10px;
+}
+
+.computer-shell .timeline {
+  border: 1px solid var(--chrome-shadow);
+  background: var(--surface-alt);
+  box-shadow: inset 1px 1px 0 var(--chrome-dark), inset -1px -1px 0 var(--chrome-hi);
+}
+
+.computer-shell .timeline-item,
+.computer-shell .event-card {
+  border: 0;
+  background: var(--surface);
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-hi),
+    inset -1px -1px 0 var(--chrome-shadow);
+}
+
+.computer-shell .event-grid {
+  gap: 7px;
+}
+
+.computer-shell .event-card {
+  min-height: 150px;
+  padding: 9px;
+}
+
+.computer-shell .event-card h3 {
+  margin: 5px 0 3px;
+  font-size: 14px;
+}
+
+.computer-shell .mail-app {
+  padding: 0 24px 24px;
+}
+
+.computer-shell .mail-actions {
+  height: 44px;
+  margin: 0 -24px 18px;
+  padding: 0 18px;
+  gap: 24px;
+}
+
+.computer-shell .mail-actions button {
+  font: 700 9px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .mail-meta {
+  grid-template-columns: 78px 1fr;
+  gap: 6px 12px;
+  padding-bottom: 17px;
+  font-size: 11px;
+}
+
+.computer-shell .mail-copy {
+  padding: 21px 0 17px;
+}
+
+.computer-shell .mail-copy p {
+  max-width: 670px;
+  margin-bottom: 20px;
+  font: 17px/1.48 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .pdf-attachment {
+  width: min(500px, 100%);
+  grid-template-columns: 44px 1fr auto;
+  gap: 12px;
+  padding: 9px;
+  background: var(--chrome);
+}
+
+.computer-shell .pdf-attachment .pdf-icon {
+  width: 40px;
+  height: 48px;
+}
+
+/* Participantes.pdf: native document viewer */
+
+.computer-shell .modal-backdrop {
+  padding: 14px;
+  background: rgba(0, 0, 0, .52);
+  backdrop-filter: none;
+}
+
+.computer-shell .pdf-window {
+  width: min(1040px, 97vw);
+  height: min(780px, 94svh);
+  max-height: 94svh;
+  grid-template-rows: 27px 35px minmax(0, 1fr) 23px;
+  padding: 3px;
+  border: 0;
+  background: var(--chrome);
+  color: var(--ui-text);
+  box-shadow:
+    inset 2px 2px 0 var(--chrome-hi),
+    inset -2px -2px 0 var(--chrome-dark),
+    7px 8px 0 rgba(0, 0, 0, .35);
+}
+
+.computer-shell .pdf-titlebar {
+  min-height: 27px;
+  padding: 0 2px 0 6px;
+  border: 0;
+  background: linear-gradient(90deg, var(--title-a), var(--title-b));
+  color: #fff;
+}
+
+.computer-shell .pdf-title {
+  min-width: 0;
+  gap: 5px;
+}
+
+.computer-shell .pdf-title b {
+  overflow: hidden;
+  font: 700 11px Tahoma, Arial, sans-serif;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.computer-shell .pdf-title-icon {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  color: var(--title-a);
+  font: 11px/1 "Courier New", monospace;
+}
+
+.computer-shell .pdf-window-buttons {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.computer-shell .pdf-window > header .pdf-window-buttons button {
+  align-self: auto;
+  width: 22px;
+  height: 21px;
+  padding: 0;
+}
+
+.computer-shell .pdf-window > header .pdf-window-buttons button:disabled {
+  color: var(--chrome-shadow);
+  opacity: 1;
+}
+
+.computer-shell .pdf-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 3px 5px 4px;
+  border-bottom: 1px solid var(--chrome-shadow);
+  background: var(--chrome);
+  box-shadow: inset 0 -1px 0 var(--chrome-hi);
+}
+
+.computer-shell .pdf-toolbar nav {
+  display: flex;
+  gap: 15px;
+  color: var(--ui-text);
+  font: 10px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .pdf-toolbar-status {
+  display: flex;
+  gap: 3px;
+}
+
+.computer-shell .pdf-toolbar-status span {
+  min-width: 72px;
+  padding: 4px 7px;
+  border: 0;
+  background: var(--surface);
+  box-shadow: inset 1px 1px 0 var(--chrome-shadow), inset -1px -1px 0 var(--chrome-hi);
+  color: var(--ui-muted);
+  font: 7px "Courier New", monospace;
+  text-align: center;
+}
+
+.computer-shell .pdf-paper {
+  margin: 0 2px;
+  padding: 18px 20px 24px;
+  border: 0;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 23px, color-mix(in srgb, var(--document-rule) 34%, transparent) 24px),
+    var(--document-paper);
+  color: var(--document-ink);
+  box-shadow: inset 1px 1px 0 var(--chrome-dark), inset -1px -1px 0 var(--chrome-hi);
+}
+
+.computer-shell .pdf-heading {
+  min-height: 75px;
+  margin-bottom: 10px;
+  padding: 8px 130px 9px 10px;
+  border: 1px solid var(--document-rule);
+  background: color-mix(in srgb, var(--document-paper) 84%, var(--chrome));
+  box-shadow: inset 1px 1px 0 color-mix(in srgb, var(--chrome-hi) 64%, transparent);
+}
+
+.computer-shell .pdf-heading span {
+  color: var(--ui-muted);
+  font: 700 7px "Courier New", monospace;
+  letter-spacing: .12em;
+}
+
+.computer-shell .pdf-heading h2 {
+  margin: 5px 0 0;
+  color: var(--document-ink);
+  font: 700 27px/1 Tahoma, Arial, sans-serif;
+  letter-spacing: -.03em;
+}
+
+.computer-shell .pdf-heading p {
+  margin: 5px 0 0;
+  color: var(--accent);
+  font: 700 8px "Courier New", monospace;
+}
+
+.computer-shell .pdf-window .cast-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.computer-shell .pdf-window .cast-card {
+  min-height: 135px;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 10px;
+  padding: 17px 8px 8px;
+  border: 1px solid var(--document-rule);
+  background: color-mix(in srgb, var(--document-paper) 89%, var(--chrome));
+  color: var(--document-ink);
+  box-shadow: inset 1px 1px 0 color-mix(in srgb, var(--chrome-hi) 70%, transparent);
+}
+
+.computer-shell .pdf-window .cast-number {
+  left: 0;
+  top: 0;
+  padding: 3px 6px;
+  background: var(--selection-bg);
+  color: var(--selection-text);
+  font: 700 7px "Courier New", monospace;
+}
+
+.computer-shell .pdf-window .avatar-medium {
+  width: 90px;
+  height: 108px;
+  border: 1px solid var(--chrome-dark);
+  box-shadow: 1px 1px 0 var(--chrome-hi);
+}
+
+.computer-shell .pdf-window .cast-card-copy > span {
+  color: var(--ui-muted);
+  font: 700 7px "Courier New", monospace;
+}
+
+.computer-shell .pdf-window .cast-card-copy h3 {
+  margin: 4px 0 2px;
+  color: var(--document-ink);
+  font: 700 15px/1.1 Tahoma, Arial, sans-serif;
+  letter-spacing: 0;
+}
+
+.computer-shell .pdf-window .cast-card-copy > b {
+  color: var(--accent);
+  font: 700 8px "Courier New", monospace;
+}
+
+.computer-shell .pdf-window .cast-card-copy p {
+  margin: 6px 0;
+  color: var(--document-ink);
+  font: 9px/1.32 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .pdf-window .tag-row {
+  gap: 3px;
+}
+
+.computer-shell .pdf-window .tag-row i,
+.computer-shell .pdf-window .trait-row small {
+  padding: 2px 4px;
+  border: 1px solid var(--document-rule);
+  background: var(--surface-alt);
+  color: var(--ui-text);
+  font: 700 6px "Courier New", monospace;
+}
+
+.computer-shell .pdf-window .trait-row {
+  gap: 3px;
+  margin-top: 5px;
+}
+
+.computer-shell .pdf-window .trait-row small {
+  background: var(--selection-bg);
+  color: var(--selection-text);
+  border-color: var(--selection-bg);
+}
+
+.computer-shell .pdf-stamp {
+  right: 31px;
+  top: 31px;
+  padding: 7px 9px;
+  border: 2px solid color-mix(in srgb, var(--accent) 62%, transparent);
+  color: color-mix(in srgb, var(--accent) 72%, transparent);
+  font: 700 8px/1.2 "Courier New", monospace;
+  transform: rotate(-3deg);
+}
+
+.computer-shell .pdf-statusbar {
+  display: grid;
+  grid-template-columns: 1fr 85px 90px;
+  gap: 2px;
+  padding: 2px;
+  background: var(--chrome);
+}
+
+.computer-shell .pdf-statusbar span {
+  min-width: 0;
+  padding: 3px 6px;
+  overflow: hidden;
+  background: var(--chrome);
+  box-shadow: inset 1px 1px 0 var(--chrome-shadow), inset -1px -1px 0 var(--chrome-hi);
+  color: var(--ui-muted);
+  font: 8px Tahoma, Arial, sans-serif;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .computer-shell .feed-panel,
+  .computer-shell .challenge-panel,
+  .computer-shell .editor-panel {
+    padding: 8px 9px 18px;
+  }
+
+  .computer-shell .feed-toolbar,
+  .computer-shell .challenge-heading,
+  .computer-shell .editor-heading {
+    min-height: 56px;
+    padding: 7px 8px;
+  }
+
+  .computer-shell .camera-thumb {
+    height: 70px;
+  }
+
+  .computer-shell .pdf-window {
+    width: calc(100vw - 10px);
+    height: calc(100svh - 16px);
+    max-height: none;
+  }
+
+  .computer-shell .pdf-toolbar nav {
+    gap: 9px;
+    font-size: 9px;
+  }
+
+  .computer-shell .pdf-toolbar-status span:first-child {
+    display: none;
+  }
+
+  .computer-shell .pdf-paper {
+    padding: 10px;
+  }
+
+  .computer-shell .pdf-heading {
+    padding-right: 86px;
+  }
+
+  .computer-shell .pdf-window .cast-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .computer-shell .pdf-window .cast-card {
+    min-height: 122px;
+  }
+}
+
+@media (max-width: 430px) {
+  .computer-shell .pdf-title b {
+    max-width: 220px;
+  }
+
+  .computer-shell .pdf-toolbar nav span:nth-child(2),
+  .computer-shell .pdf-toolbar nav span:nth-child(3) {
+    display: none;
+  }
+
+  .computer-shell .pdf-heading h2 {
+    font-size: 22px;
+  }
+
+  .computer-shell .pdf-window .cast-card {
+    grid-template-columns: 76px minmax(0, 1fr);
+  }
+
+  .computer-shell .pdf-window .avatar-medium {
+    width: 74px;
+    height: 91px;
+  }
+
+  .computer-shell .pdf-window .cast-card-copy p {
+    display: none;
+  }
+}
