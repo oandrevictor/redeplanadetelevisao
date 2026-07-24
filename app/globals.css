@@ -4207,3 +4207,197 @@ select:focus-visible {
     transform: scale(1.16);
   }
 }
+
+/* Compact tape-bin layout for the Edição event pool. */
+
+.computer-shell .event-grid {
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  align-items: start;
+  gap: 8px 9px;
+}
+
+.computer-shell .event-grid.event-grid-approach {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.computer-shell .event-card {
+  --event-accent: #6d8588;
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  min-height: 104px;
+  padding: 9px 9px 8px 11px;
+  border: 1px solid var(--chrome-shadow);
+  border-left: 4px solid var(--event-accent);
+  background: var(--surface);
+  color: var(--ui-text);
+  cursor: grab;
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-hi),
+    inset -1px -1px 0 var(--chrome-dark),
+    2px 2px 0 color-mix(in srgb, var(--chrome-shadow) 42%, transparent);
+}
+
+.computer-shell .event-card[data-category="Convivência"] {
+  --event-accent: #70868a;
+}
+
+.computer-shell .event-card[data-category="Conflito"] {
+  --event-accent: #c93b32;
+}
+
+.computer-shell .event-card[data-category="Humor"] {
+  --event-accent: #e9781d;
+}
+
+.computer-shell .event-card[data-category="Prova"] {
+  --event-accent: #2879c2;
+}
+
+.computer-shell .event-card[data-category="Festa"] {
+  --event-accent: #179873;
+}
+
+.computer-shell .event-card[data-category="Votação"] {
+  --event-accent: #773ca8;
+}
+
+.computer-shell .event-card[data-category="Memória"] {
+  --event-accent: #bd3a91;
+}
+
+.computer-shell .event-card:active {
+  cursor: grabbing;
+}
+
+.computer-shell .event-card-top {
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--ui-muted);
+  font: 7px "Courier New", monospace;
+}
+
+.computer-shell .event-card-top span {
+  display: inline-block;
+  max-width: calc(100% - 38px);
+  overflow: hidden;
+  padding: 2px 5px 1px;
+  background: var(--event-accent);
+  color: #fff;
+  font-weight: 700;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.computer-shell .event-card-top b {
+  margin-left: auto;
+  color: var(--ui-text);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.computer-shell .event-card h3 {
+  min-height: 30px;
+  margin: 6px 0 5px;
+  color: var(--ui-text);
+  font: 700 14px/1.08 Georgia, "Times New Roman", serif;
+  letter-spacing: -.01em;
+}
+
+.computer-shell .event-card:has(.approach-editor) {
+  grid-template-rows: auto auto auto 1fr;
+  min-height: 218px;
+}
+
+.computer-shell .event-card > button {
+  align-self: end;
+  width: 100%;
+  min-height: 20px;
+  height: auto;
+  padding: 5px 0 0;
+  border: 0;
+  border-top: 1px dotted var(--document-rule);
+  background: transparent;
+  color: var(--ui-muted);
+  box-shadow: none;
+  text-align: left;
+  font: 7px/1.2 "Courier New", monospace;
+  letter-spacing: 0;
+  text-transform: lowercase;
+}
+
+.computer-shell .event-card > button:hover {
+  background: transparent;
+  color: var(--event-accent);
+  box-shadow: none;
+}
+
+.computer-shell .event-card .approach-editor {
+  margin: 4px 0 6px;
+  padding: 7px 6px 6px;
+  border-color: var(--document-rule);
+  background: var(--surface-alt);
+}
+
+.computer-shell .event-card .approach-editor legend {
+  color: var(--event-accent);
+  font-size: 7px;
+}
+
+.computer-shell .event-card .approach-row {
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 4px;
+}
+
+.computer-shell .event-card .approach-row + .approach-row {
+  margin-top: 5px;
+}
+
+.computer-shell .event-card .approach-options {
+  gap: 2px;
+}
+
+.computer-shell .event-card .approach-options button {
+  min-height: 19px;
+  padding: 0 5px;
+  font-size: 7px;
+}
+
+.computer-shell .event-card .approach-single {
+  min-height: 20px;
+  padding: 0 5px;
+  font-size: 7px;
+}
+
+.computer-shell .event-card .approach-tone select {
+  height: 22px;
+  font-size: 8px;
+}
+
+@media (max-width: 980px) {
+  .computer-shell .event-grid,
+  .computer-shell .event-grid.event-grid-approach {
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  }
+
+  .computer-shell .event-card:has(.approach-editor) {
+    min-height: 218px;
+  }
+
+  .computer-shell .event-card .approach-row {
+    grid-template-columns: 54px minmax(0, 1fr);
+  }
+
+  .computer-shell .event-card .approach-row > span {
+    padding-top: 5px;
+  }
+}
+
+@media (max-width: 520px) {
+  .computer-shell .event-grid,
+  .computer-shell .event-grid.event-grid-approach {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1128,22 +1128,30 @@ export default function Home() {
               </select>
             </label>
           </div>
-          <div className="event-grid">
+          <div className={`event-grid${week >= 2 ? " event-grid-approach" : ""}`}>
             {availableEvents.map((event) => (
               <article
                 className="event-card"
+                data-category={event.category}
                 draggable
                 key={event.id}
                 onDragStart={() => setDragged({ source: "bank", id: event.id })}
+                title={event.description}
               >
                 <div className="event-card-top">
                   <span>{event.category}</span>
-                  <b>{event.duration}′</b>
+                  <b>{event.duration} min</b>
                 </div>
                 <h3>{event.title}</h3>
-                <p>{event.description}</p>
+                <p className="sr-only">{event.description}</p>
                 {renderApproachControls(event)}
-                <button onClick={() => addEvent(event)} type="button">+ Adicionar à timeline</button>
+                <button
+                  aria-label={`Adicionar ${event.title} à timeline`}
+                  onClick={() => addEvent(event)}
+                  type="button"
+                >
+                  :: arraste ou clique para adicionar
+                </button>
               </article>
             ))}
             {availableEvents.length === 0 && <p className="no-results">Nenhum corte corresponde aos filtros.</p>}
