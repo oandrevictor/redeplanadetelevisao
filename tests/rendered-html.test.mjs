@@ -72,5 +72,7 @@ test("source contains the complete playable season loop", async () => {
   assert.match(page, /Quem deve vencer\?/);
   assert.match(page, /activeParticipants\.length === 3/);
   assert.match(css, /prefers-reduced-motion/);
+  assert.match(css, /\.computer-shell \.feed-entry > div:not\(\.feed-line\)/);
+  assert.doesNotMatch(css, /grid-template-columns:\s*58px 0 minmax\(0,\s*1fr\) 26px/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
 });

@@ -3396,7 +3396,7 @@ select:focus-visible {
 }
 
 .computer-shell .feed-entry {
-  grid-template-columns: 58px 0 minmax(0, 1fr) 26px;
+  grid-template-columns: 58px minmax(0, 1fr) 26px;
   gap: 6px;
   min-height: 67px;
   padding: 9px 10px;
@@ -3409,11 +3409,17 @@ select:focus-visible {
 }
 
 .computer-shell .feed-entry time {
+  grid-column: 1;
   font: 700 11px "Courier New", monospace;
 }
 
 .computer-shell .feed-line {
   display: none;
+}
+
+.computer-shell .feed-entry > div:not(.feed-line) {
+  grid-column: 2;
+  min-width: 0;
 }
 
 .computer-shell .feed-entry h3 {
@@ -3426,6 +3432,7 @@ select:focus-visible {
 }
 
 .computer-shell .feed-entry > strong {
+  grid-column: 3;
   color: var(--ui-muted);
   font: 700 11px "Courier New", monospace;
 }
@@ -4118,5 +4125,13 @@ select:focus-visible {
 
   .computer-shell .approach-row > span {
     padding-top: 0;
+  }
+
+  .computer-shell .feed-entry {
+    grid-template-columns: 45px minmax(0, 1fr);
+  }
+
+  .computer-shell .feed-entry > strong {
+    display: none;
   }
 }
