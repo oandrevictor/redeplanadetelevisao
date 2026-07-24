@@ -3,7 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 
 type ChallengeType = "resistencia" | "sorte" | "atencao";
+type PersonalityTrait =
+  | "carisma"
+  | "estrategia"
+  | "impulsividade"
+  | "lealdade"
+  | "competitividade"
+  | "percepcaoSocial"
+  | "conscienciaDasCameras";
+type TraitScore = 1 | 2 | 3 | 4 | 5;
 type AppView = "mail" | "feed" | "challenge" | "edit";
+type Theme = "light" | "dark";
 type Phase =
   | "email"
   | "feedIntro"
@@ -31,7 +41,15 @@ type Participant = {
   occupation: string;
   bio: string;
   quote: string;
-  traits: Record<ChallengeType, number>;
+  traits: Record<ChallengeType, TraitScore>;
+  personalityTraits: Record<PersonalityTrait, TraitScore>;
+  personalTriggers: string[];
+  behavioralTendencies: string[];
+  publicPersona: string;
+  contradictions: string[];
+  strengths: string[];
+  weaknesses: string[];
+  possibleArcs: string[];
   tags: string[];
   portrait: { x: "0%" | "50%" | "100%"; y: "0%" | "100%" };
 };
@@ -59,6 +77,22 @@ const participants: Participant[] = [
     bio: "Carismática, rápida nas respostas e incapaz de ignorar uma provocação. Quer usar o prêmio para abrir seu próprio bar.",
     quote: "Se a câmera está ligada, eu também estou.",
     traits: { resistencia: 4, sorte: 3, atencao: 5 },
+    personalityTraits: {
+      carisma: 5,
+      estrategia: 3,
+      impulsividade: 4,
+      lealdade: 4,
+      competitividade: 5,
+      percepcaoSocial: 4,
+      conscienciaDasCameras: 5,
+    },
+    personalTriggers: ["ser chamada de falsa", "ver um aliado sendo atacado", "sentir que tentam apagar sua presença"],
+    behavioralTendencies: ["responde provocações imediatamente", "protege aliados em público", "transforma tensão em performance"],
+    publicPersona: "A protagonista magnética que não foge de confronto e sempre entrega uma boa cena.",
+    contradictions: ["prega lealdade, mas adora testar alianças", "parece autoconfiante, porém teme ser irrelevante"],
+    strengths: ["presença de palco", "leitura rápida do ambiente", "coragem em conflitos"],
+    weaknesses: ["dificuldade de recuar", "necessidade de validação", "exposição excessiva de suas intenções"],
+    possibleArcs: ["liderança carismática da casa", "ruptura dramática com um aliado", "redenção após perceber que passou do ponto"],
     tags: ["magnética", "competitiva", "leal"],
     portrait: { x: "0%", y: "0%" },
   },
@@ -71,6 +105,22 @@ const participants: Participant[] = [
     bio: "Parece sereno até entrar numa disputa. Tem força de sobra, mas se perde quando precisa prestar atenção em detalhes.",
     quote: "Devagar também é um jeito de chegar primeiro.",
     traits: { resistencia: 5, sorte: 3, atencao: 2 },
+    personalityTraits: {
+      carisma: 3,
+      estrategia: 2,
+      impulsividade: 2,
+      lealdade: 5,
+      competitividade: 4,
+      percepcaoSocial: 2,
+      conscienciaDasCameras: 2,
+    },
+    personalTriggers: ["ser tratado como pouco inteligente", "quebra de palavra", "provocações durante provas"],
+    behavioralTendencies: ["evita conflitos até acumular irritação", "cumpre acordos ao pé da letra", "fica mais agressivo em competições"],
+    publicPersona: "O gigante tranquilo e confiável que prefere agir a falar.",
+    contradictions: ["diz não ligar para estratégia, mas guarda cada traição", "parece paciente, porém odeia perder"],
+    strengths: ["resistência", "constância", "lealdade"],
+    weaknesses: ["baixa leitura social", "teimosia", "dificuldade com sutilezas"],
+    possibleArcs: ["azarão que assume a liderança", "explosão depois de semanas em silêncio", "traição que abala seu código de honra"],
     tags: ["forte", "calmo", "teimoso"],
     portrait: { x: "50%", y: "0%" },
   },
@@ -83,6 +133,22 @@ const participants: Participant[] = [
     bio: "Observa antes de falar e raramente esquece uma frase. Entrou para provar que estratégia também rende entretenimento.",
     quote: "Toda casa tem uma pauta escondida.",
     traits: { resistencia: 2, sorte: 3, atencao: 5 },
+    personalityTraits: {
+      carisma: 3,
+      estrategia: 5,
+      impulsividade: 1,
+      lealdade: 3,
+      competitividade: 4,
+      percepcaoSocial: 5,
+      conscienciaDasCameras: 4,
+    },
+    personalTriggers: ["ser subestimada", "contradições evidentes", "perder o controle de uma conversa"],
+    behavioralTendencies: ["observa antes de se posicionar", "faz perguntas para expor incoerências", "mantém opções abertas"],
+    publicPersona: "A estrategista cerebral que enxerga as engrenagens por trás de cada relação.",
+    contradictions: ["valoriza a verdade, mas omite informação quando convém", "quer parecer imparcial, embora seja muito competitiva"],
+    strengths: ["memória", "planejamento", "percepção social"],
+    weaknesses: ["frieza aparente", "excesso de controle", "dificuldade de criar intimidade"],
+    possibleArcs: ["mentora que controla a casa", "queda causada por excesso de confiança", "vínculo afetivo que desmonta sua estratégia"],
     tags: ["analítica", "reservada", "incisiva"],
     portrait: { x: "100%", y: "0%" },
   },
@@ -95,6 +161,22 @@ const participants: Participant[] = [
     bio: "Improvisa, brinca e costuma cair de pé. É ótimo em criar alianças rápidas e péssimo em esconder quando está mentindo.",
     quote: "Se deu ruim, pelo menos virou história.",
     traits: { resistencia: 3, sorte: 5, atencao: 2 },
+    personalityTraits: {
+      carisma: 4,
+      estrategia: 2,
+      impulsividade: 5,
+      lealdade: 2,
+      competitividade: 3,
+      percepcaoSocial: 3,
+      conscienciaDasCameras: 4,
+    },
+    personalTriggers: ["ser encurralado", "silêncio constrangedor", "autoridade rígida"],
+    behavioralTendencies: ["improvisa saídas", "faz promessas no calor do momento", "usa humor para desviar de cobranças"],
+    publicPersona: "O sobrevivente divertido que transforma todo desastre em história.",
+    contradictions: ["quer ser querido por todos, mas não sustenta todos os acordos", "parece despreocupado, porém monitora a própria imagem"],
+    strengths: ["improviso", "facilidade de conexão", "resiliência"],
+    weaknesses: ["indisciplina", "mentiras transparentes", "decisões de curto prazo"],
+    possibleArcs: ["alívio cômico que vira peça-chave", "queda provocada por alianças incompatíveis", "amadurecimento após perder um aliado"],
     tags: ["sortudo", "engraçado", "impulsivo"],
     portrait: { x: "0%", y: "100%" },
   },
@@ -107,6 +189,22 @@ const participants: Participant[] = [
     bio: "Transforma qualquer silêncio em cena e todo desafeto em piada. Tem uma leitura afiada da casa e do público.",
     quote: "Meu voto é secreto, minha cara não.",
     traits: { resistencia: 2, sorte: 5, atencao: 3 },
+    personalityTraits: {
+      carisma: 5,
+      estrategia: 4,
+      impulsividade: 3,
+      lealdade: 3,
+      competitividade: 3,
+      percepcaoSocial: 5,
+      conscienciaDasCameras: 5,
+    },
+    personalTriggers: ["ser ridicularizada sem controlar a piada", "arrogância", "ser excluída de uma conversa"],
+    behavioralTendencies: ["lê o clima antes de fazer humor", "espalha verdades em forma de piada", "aproxima grupos rivais"],
+    publicPersona: "A comentarista popular da casa, capaz de dizer o que o público está pensando.",
+    contradictions: ["usa humor como afeto e como arma", "parece aberta, mas protege cuidadosamente suas vulnerabilidades"],
+    strengths: ["carisma", "timing cômico", "leitura das relações"],
+    weaknesses: ["fofoca", "dificuldade de falar seriamente", "medo de virar alvo do riso"],
+    possibleArcs: ["narradora querida da temporada", "piada que desencadeia um grande conflito", "revelação emocional por trás da comediante"],
     tags: ["hilária", "social", "imprevisível"],
     portrait: { x: "50%", y: "100%" },
   },
@@ -119,6 +217,22 @@ const participants: Participant[] = [
     bio: "Equilibrado e atento ao ambiente, mas demora para confiar. Quando decide competir, não mede esforço.",
     quote: "O segredo é saber qual onda deixar passar.",
     traits: { resistencia: 4, sorte: 2, atencao: 4 },
+    personalityTraits: {
+      carisma: 3,
+      estrategia: 4,
+      impulsividade: 1,
+      lealdade: 4,
+      competitividade: 4,
+      percepcaoSocial: 4,
+      conscienciaDasCameras: 2,
+    },
+    personalTriggers: ["pressão para se abrir", "traição de confiança", "caos desnecessário"],
+    behavioralTendencies: ["espera antes de tomar partido", "observa padrões silenciosamente", "compete com intensidade sem provocar"],
+    publicPersona: "O competidor equilibrado e misterioso que fala pouco, mas percebe muito.",
+    contradictions: ["busca paz, mas se realiza na disputa", "quer conexões profundas, embora mantenha todos à distância"],
+    strengths: ["autocontrole", "foco", "capacidade de observação"],
+    weaknesses: ["isolamento", "lentidão para reagir politicamente", "dificuldade de demonstrar afeto"],
+    possibleArcs: ["competidor silencioso que cresce no fim", "romance ou amizade que rompe sua reserva", "eliminação por demorar a escolher um lado"],
     tags: ["focado", "atlético", "cauteloso"],
     portrait: { x: "100%", y: "100%" },
   },
@@ -303,7 +417,25 @@ function AppIcon({
   );
 }
 
+function ThemeSwitch({ theme, onToggle }: { theme: Theme; onToggle: () => void }) {
+  const dark = theme === "dark";
+
+  return (
+    <button
+      aria-label={dark ? "Ativar tema claro" : "Ativar tema escuro"}
+      aria-pressed={dark}
+      className="theme-switch"
+      onClick={onToggle}
+      type="button"
+    >
+      <span aria-hidden="true">{dark ? "☀" : "◐"}</span>
+      <b>{dark ? "CLARO" : "ESCURO"}</b>
+    </button>
+  );
+}
+
 export default function Home() {
+  const [theme, setTheme] = useState<Theme>("light");
   const [started, setStarted] = useState(false);
   const [phase, setPhase] = useState<Phase>("email");
   const [view, setView] = useState<AppView>("mail");
@@ -327,6 +459,19 @@ export default function Home() {
   const [lastEliminatedId, setLastEliminatedId] = useState<string | null>(null);
   const [winnerId, setWinnerId] = useState<string | null>(null);
   const [soundOn, setSoundOn] = useState(true);
+
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem("rede-plana-theme");
+    if (savedTheme === "dark" || savedTheme === "light") setTheme(savedTheme);
+  }, []);
+
+  function toggleTheme() {
+    setTheme((current) => {
+      const next = current === "light" ? "dark" : "light";
+      window.localStorage.setItem("rede-plana-theme", next);
+      return next;
+    });
+  }
 
   const activeParticipants = useMemo(
     () => participants.filter((participant) => activeIds.includes(participant.id)),
@@ -859,7 +1004,8 @@ export default function Home() {
 
   if (!started) {
     return (
-      <main className="boot-screen">
+      <main className={`boot-screen theme-${theme}`}>
+        <ThemeSwitch onToggle={toggleTheme} theme={theme} />
         <div className="signal-bars" aria-hidden="true"><i /><i /><i /></div>
         <div className="boot-grid" aria-hidden="true" />
         <div className="boot-copy">
@@ -879,7 +1025,8 @@ export default function Home() {
   if (isLivePhase) {
     const liveAudience = Math.round(11 + (predictedAudience - 11) * liveProgress / 100);
     return (
-      <main className="broadcast-screen">
+      <main className={`broadcast-screen theme-${theme}`}>
+        <ThemeSwitch onToggle={toggleTheme} theme={theme} />
         <div className="broadcast-top">
           <div className="on-air"><i /> AO VIVO</div>
           <span>CASA VIGIADA · SEMANA {String(week).padStart(2, "0")}</span>
@@ -914,7 +1061,8 @@ export default function Home() {
 
   if (phase === "summaryPremiere") {
     return (
-      <main className="result-screen">
+      <main className={`result-screen theme-${theme}`}>
+        <ThemeSwitch onToggle={toggleTheme} theme={theme} />
         <div className="result-window">
           <span className="eyebrow">RELATÓRIO DE EXIBIÇÃO · EPISÓDIO 01</span>
           <h1>Uma estreia acima da meta.</h1>
@@ -949,7 +1097,8 @@ export default function Home() {
       ? activeParticipants
       : participants.filter((participant) => nominees.includes(participant.id));
     return (
-      <main className="vote-screen">
+      <main className={`vote-screen theme-${theme}`}>
+        <ThemeSwitch onToggle={toggleTheme} theme={theme} />
         <div className="vote-brand"><span>CASA</span><b>VIGIADA</b><small>VOTAÇÃO DO PÚBLICO</small></div>
         <section className="vote-box">
           <span className="eyebrow">{phase === "winnerVote" ? "GRANDE FINAL" : `SEMANA ${String(week).padStart(2, "0")} · VOTAÇÃO ABERTA`}</span>
@@ -988,7 +1137,8 @@ export default function Home() {
   if (phase === "weekSummary") {
     const finalists = activeParticipants.length === 3;
     return (
-      <main className="result-screen week-result">
+      <main className={`result-screen week-result theme-${theme}`}>
+        <ThemeSwitch onToggle={toggleTheme} theme={theme} />
         <div className="result-window">
           <span className="eyebrow">ARQUIVO SEMANAL · SEMANA {String(week).padStart(2, "0")}</span>
           <h1>{finalists ? "Temos os três finalistas." : `Semana ${week} encerrada.`}</h1>
@@ -1022,7 +1172,8 @@ export default function Home() {
 
   if (phase === "winnerReveal") {
     return (
-      <main className="winner-screen">
+      <main className={`winner-screen theme-${theme}`}>
+        <ThemeSwitch onToggle={toggleTheme} theme={theme} />
         <div className="confetti" aria-hidden="true">{Array.from({ length: 28 }).map((_, index) => <i key={index} />)}</div>
         <div className="winner-copy">
           <span className="eyebrow">CASA VIGIADA · FINAL DA TEMPORADA</span>
@@ -1043,7 +1194,7 @@ export default function Home() {
   }
 
   return (
-    <main className="computer-shell">
+    <main className={`computer-shell theme-${theme}`}>
       <div className="desktop-wallpaper" aria-hidden="true"><span>RPT</span><b>PRODUÇÃO<br />CASA VIGIADA</b></div>
       <aside className="desktop-icons" aria-label="Aplicativos">
         <AppIcon active={view === "mail"} label="Correio" onClick={() => { setView("mail"); setWindowOpen(true); }} symbol="✉" />
@@ -1089,6 +1240,7 @@ export default function Home() {
           <button onClick={() => setWindowOpen(true)} type="button">{view === "mail" ? "✉ Correio" : "▣ Central de Produção"}</button>
         </div>
         <div className="task-status">
+          <ThemeSwitch onToggle={toggleTheme} theme={theme} />
           <button aria-label={soundOn ? "Desativar som" : "Ativar som"} onClick={() => setSoundOn((current) => !current)} type="button">{soundOn ? "▰" : "▱"}</button>
           <span>SEM {String(week).padStart(2, "0")}</span>
           <time>08:16</time>

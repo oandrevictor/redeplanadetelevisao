@@ -21,13 +21,13 @@ export async function generateMetadata(): Promise<Metadata> {
       description: "Você decide o que o Brasil vê.",
       type: "website",
       locale: "pt_BR",
-      images: [{ url: new URL("/og.png", base), width: 1536, height: 1024, alt: "Rede Plana de Televisão — você decide o que o Brasil vê" }],
+      images: [{ url: new URL("/og-retro.png", base), width: 1536, height: 1024, alt: "Rede Plana de Televisão em uma central de produção de TV com visual de computador dos anos 1990" }],
     },
     twitter: {
       card: "summary_large_image",
       title: "Rede Plana de Televisão",
       description: "Você decide o que o Brasil vê.",
-      images: [new URL("/og.png", base)],
+      images: [new URL("/og-retro.png", base)],
     },
   };
 }

@@ -2579,3 +2579,727 @@ select:focus-visible {
     transition-duration: .001ms !important;
   }
 }
+
+/* 1998 broadcast workstation theme */
+
+.theme-light {
+  --desk: #087f7b;
+  --desk-deep: #00645f;
+  --chrome: #c8c6bf;
+  --chrome-hi: #ffffff;
+  --chrome-mid: #dfddd5;
+  --chrome-shadow: #85857f;
+  --chrome-dark: #252525;
+  --surface: #f3f0e8;
+  --surface-alt: #dedbd3;
+  --surface-row: #d2d0c9;
+  --ui-text: #111111;
+  --ui-muted: #555750;
+  --title-a: #071a78;
+  --title-b: #0c67b6;
+  --title-text: #ffffff;
+  --accent: #071a78;
+  --accent-2: #b53c8d;
+  --signal: #007e75;
+  --screen-glow: rgba(186, 255, 238, .1);
+  color: var(--ui-text);
+}
+
+.theme-dark {
+  --desk: #030712;
+  --desk-deep: #000208;
+  --chrome: #101a30;
+  --chrome-hi: #365173;
+  --chrome-mid: #17243e;
+  --chrome-shadow: #060a13;
+  --chrome-dark: #000000;
+  --surface: #101a31;
+  --surface-alt: #15213b;
+  --surface-row: #182744;
+  --ui-text: #d5f7ff;
+  --ui-muted: #79a9ba;
+  --title-a: #ec197d;
+  --title-b: #792385;
+  --title-text: #ffffff;
+  --accent: #26d7e8;
+  --accent-2: #ec197d;
+  --signal: #26d7e8;
+  --screen-glow: rgba(49, 215, 232, .12);
+  color: var(--ui-text);
+}
+
+.theme-switch {
+  position: fixed;
+  z-index: 120;
+  top: 12px;
+  right: 12px;
+  min-width: 104px;
+  height: 29px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 0;
+  background: var(--chrome);
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-hi),
+    inset -1px -1px 0 var(--chrome-dark),
+    inset 2px 2px 0 var(--chrome-mid),
+    inset -2px -2px 0 var(--chrome-shadow);
+  color: var(--ui-text);
+  cursor: pointer;
+  font: 10px Tahoma, Arial, sans-serif;
+  letter-spacing: .03em;
+}
+
+.theme-switch:active,
+.theme-switch[aria-pressed="true"] {
+  padding: 1px 8px 0 10px;
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-dark),
+    inset -1px -1px 0 var(--chrome-hi),
+    inset 2px 2px 0 var(--chrome-shadow);
+}
+
+.theme-switch span {
+  color: var(--accent);
+  font: 15px/1 "Courier New", monospace;
+}
+
+.theme-switch b {
+  font-weight: 700;
+}
+
+.theme-light,
+.theme-dark {
+  --display: "Arial Narrow", Tahoma, Arial, sans-serif;
+  --sans: Tahoma, Arial, sans-serif;
+  --mono: "Courier New", Courier, monospace;
+  --paper: var(--surface);
+  --paper-2: var(--surface);
+  --text: var(--ui-text);
+  --muted: var(--ui-muted);
+  --cyan: var(--signal);
+  --magenta: var(--accent-2);
+  --yellow: #e2b348;
+  --orange: #bd5a29;
+  --mint: #42cba5;
+  --ink: var(--desk-deep);
+  --border: var(--chrome-shadow);
+}
+
+.theme-light::before,
+.theme-dark::before {
+  opacity: .23;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 2px, rgba(0, 0, 0, .14) 3px, transparent 4px),
+    repeating-linear-gradient(90deg, rgba(255, 0, 0, .02) 0 1px, rgba(0, 255, 255, .015) 1px 3px);
+  mix-blend-mode: multiply;
+}
+
+.theme-dark::before {
+  opacity: .46;
+  mix-blend-mode: screen;
+}
+
+/* Desktop */
+
+.computer-shell.theme-light,
+.computer-shell.theme-dark {
+  background:
+    radial-gradient(ellipse at center, var(--screen-glow), transparent 70%),
+    linear-gradient(var(--desk), var(--desk-deep));
+  font-family: Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .desktop-wallpaper {
+  display: none;
+}
+
+.computer-shell .desktop-icons {
+  left: 14px;
+  top: 17px;
+  gap: 12px;
+  width: 90px;
+}
+
+.computer-shell .desktop-icon {
+  width: 88px;
+  min-height: 82px;
+  color: #fff;
+  font: 700 11px/1.25 "Courier New", monospace;
+  text-shadow: 1px 1px #000;
+}
+
+.computer-shell .desktop-icon:hover,
+.computer-shell .desktop-icon.is-active {
+  border: 1px dotted #fff;
+  background: rgba(0, 0, 128, .32);
+}
+
+.computer-shell .desktop-icon-art {
+  width: 43px;
+  height: 43px;
+  border: 1px solid #1d1d1d;
+  background: var(--chrome);
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-hi),
+    inset -1px -1px 0 var(--chrome-shadow),
+    2px 2px 0 rgba(0, 0, 0, .38);
+  color: var(--accent);
+  font-size: 21px;
+  text-shadow: none;
+}
+
+.computer-shell .app-window {
+  left: clamp(105px, 15vw, 285px);
+  top: clamp(34px, 8vh, 82px);
+  width: min(1160px, calc(100vw - 330px));
+  height: calc(100svh - 150px);
+  min-height: 520px;
+  grid-template-rows: 30px auto minmax(0, 1fr);
+  border: 0;
+  background: var(--chrome);
+  box-shadow:
+    inset 2px 2px 0 var(--chrome-hi),
+    inset -2px -2px 0 var(--chrome-dark),
+    5px 6px 0 rgba(0, 0, 0, .3);
+  color: var(--ui-text);
+  padding: 3px;
+}
+
+.computer-shell .app-mail {
+  width: min(870px, calc(100vw - 310px));
+}
+
+.computer-shell .window-titlebar {
+  height: 27px;
+  padding: 0 3px 0 7px;
+  border: 0;
+  background: linear-gradient(90deg, var(--title-a), var(--title-b));
+  color: var(--title-text);
+  font: 700 12px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .window-app-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 5px;
+  border: 0;
+  color: #e7d06e;
+  font-size: 11px;
+}
+
+.computer-shell .window-buttons {
+  gap: 2px;
+  padding: 2px 0;
+}
+
+.computer-shell .window-buttons button,
+.pdf-window > header button {
+  width: 23px;
+  border: 0;
+  background: var(--chrome);
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-hi),
+    inset -1px -1px 0 var(--chrome-dark),
+    inset 2px 2px 0 var(--chrome-mid),
+    inset -2px -2px 0 var(--chrome-shadow);
+  color: var(--ui-text);
+  font: 13px/1 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .app-tabs {
+  min-height: 39px;
+  gap: 3px;
+  padding: 6px 7px 0;
+  border: 0;
+  background: var(--chrome);
+}
+
+.computer-shell .app-tabs button {
+  min-height: 31px;
+  padding: 0 13px;
+  border: 0;
+  background: var(--chrome);
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-hi),
+    inset -1px 0 0 var(--chrome-dark),
+    inset 2px 2px 0 var(--chrome-mid);
+  color: var(--ui-text);
+  font: 11px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .app-tabs button[aria-selected="true"] {
+  top: 1px;
+  background: var(--surface);
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-hi),
+    inset -1px 0 0 var(--chrome-shadow);
+}
+
+.computer-shell .app-tabs button[aria-selected="true"]::before {
+  display: none;
+}
+
+.computer-shell .window-content,
+.mail-app,
+.feed-panel,
+.challenge-panel,
+.editor-panel {
+  background: var(--surface);
+  color: var(--ui-text);
+}
+
+.computer-shell .window-content {
+  margin: 0 3px 3px;
+  border: 1px solid var(--chrome-shadow);
+  box-shadow: inset 1px 1px 0 var(--chrome-dark), inset -1px -1px 0 var(--chrome-hi);
+}
+
+.computer-shell .mail-app {
+  background: var(--surface);
+}
+
+.computer-shell .mail-actions {
+  border-color: var(--chrome-shadow);
+  background: var(--chrome);
+}
+
+.computer-shell .mail-actions button,
+.computer-shell .mail-meta span,
+.computer-shell .mail-copy small,
+.computer-shell .attachment-label,
+.computer-shell .feed-entry span,
+.computer-shell .feed-entry p,
+.computer-shell .status-note,
+.computer-shell .challenge-heading p,
+.computer-shell .compact .cast-card-copy p,
+.computer-shell .timeline-hint,
+.computer-shell .no-results {
+  color: var(--ui-muted);
+}
+
+.computer-shell .mail-actions button:first-child,
+.computer-shell .feed-entry time {
+  color: var(--accent);
+}
+
+.computer-shell .mail-meta,
+.computer-shell .mail-actions,
+.computer-shell .feed-toolbar,
+.computer-shell .challenge-heading,
+.computer-shell .editor-heading,
+.computer-shell .feed-log,
+.computer-shell .feed-entry {
+  border-color: var(--chrome-shadow);
+}
+
+.computer-shell .pdf-attachment,
+.computer-shell .challenge-type,
+.computer-shell .event-card,
+.computer-shell .cast-card {
+  border: 0;
+  background: var(--chrome-mid);
+  color: var(--ui-text);
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-hi),
+    inset -1px -1px 0 var(--chrome-dark),
+    inset 2px 2px 0 var(--chrome);
+}
+
+.computer-shell .button,
+.computer-shell .event-card > button,
+.result-screen .button,
+.vote-screen .button,
+.winner-screen .button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 0;
+  background: var(--chrome);
+  color: var(--ui-text);
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-hi),
+    inset -1px -1px 0 var(--chrome-dark),
+    inset 2px 2px 0 var(--chrome-mid),
+    inset -2px -2px 0 var(--chrome-shadow);
+  font: 700 10px Tahoma, Arial, sans-serif;
+  letter-spacing: 0;
+}
+
+.computer-shell .button:hover:not(:disabled),
+.computer-shell .event-card > button:hover,
+.result-screen .button:hover:not(:disabled),
+.vote-screen .button:hover:not(:disabled),
+.winner-screen .button:hover:not(:disabled) {
+  transform: none;
+  background: var(--surface-alt);
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-dark),
+    inset -1px -1px 0 var(--chrome-hi);
+}
+
+.computer-shell .live-chip,
+.computer-shell .standing,
+.computer-shell .date-card,
+.computer-shell .runtime {
+  border-radius: 0;
+  font-family: "Courier New", monospace;
+}
+
+.computer-shell .feed-toolbar h2,
+.computer-shell .challenge-heading h2,
+.computer-shell .editor-heading h2 {
+  font: 700 clamp(24px, 3vw, 36px)/1 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .camera-thumb {
+  border-color: var(--chrome-dark);
+  background:
+    repeating-linear-gradient(0deg, transparent 0 3px, rgba(0,0,0,.22) 4px),
+    linear-gradient(135deg, rgba(38, 215, 232, .14), transparent),
+    #172837;
+}
+
+.computer-shell .feed-entry h3,
+.computer-shell .challenge-type b,
+.computer-shell .event-card h3,
+.computer-shell .cast-card-copy h3 {
+  font-family: Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .challenge-type.is-selected {
+  background: var(--title-a);
+  color: #fff;
+  box-shadow:
+    inset 1px 1px 0 #8ba7c6,
+    inset -1px -1px 0 #000,
+    3px 3px 0 var(--accent-2);
+}
+
+.computer-shell .timeline-item {
+  border-color: var(--chrome-shadow);
+  background: var(--surface-row);
+  color: var(--ui-text);
+}
+
+.computer-shell .timeline-item small,
+.computer-shell .event-card p,
+.computer-shell .heat-row {
+  color: var(--ui-muted);
+}
+
+.computer-shell .event-filters input,
+.computer-shell .event-filters select {
+  height: 30px;
+  border: 2px inset var(--chrome);
+  background: var(--surface);
+  color: var(--ui-text);
+}
+
+.computer-shell .sticky-actions {
+  background: color-mix(in srgb, var(--chrome) 96%, transparent);
+  border-color: var(--chrome-shadow);
+}
+
+.computer-shell .guide-bubble {
+  filter: drop-shadow(3px 3px 0 rgba(0, 0, 0, .45));
+}
+
+.computer-shell .guide-copy {
+  min-height: 98px;
+  border: 1px solid var(--chrome-dark);
+  background: var(--chrome);
+  color: var(--ui-text);
+  box-shadow: inset 1px 1px 0 var(--chrome-hi), inset -1px -1px 0 var(--chrome-shadow);
+}
+
+.computer-shell .guide-copy span {
+  color: var(--accent);
+}
+
+.computer-shell .guide-tail {
+  border-color: var(--chrome-dark);
+  background: var(--chrome);
+}
+
+.computer-shell .plin {
+  border-width: 2px;
+  border-radius: 50%;
+  background: var(--title-a);
+  animation: none;
+}
+
+.computer-shell .plin-screen {
+  border-width: 2px;
+  background: #b9d8dd;
+}
+
+.computer-shell .taskbar {
+  height: 42px;
+  grid-template-columns: 104px 1fr auto;
+  border: 0;
+  background: var(--chrome);
+  box-shadow: inset 0 2px 0 var(--chrome-hi);
+  color: var(--ui-text);
+}
+
+.computer-shell .task-start {
+  margin: 4px 2px 3px 4px;
+  border: 0 !important;
+  background: var(--chrome);
+  color: var(--ui-text);
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-hi),
+    inset -1px -1px 0 var(--chrome-dark),
+    inset 2px 2px 0 var(--chrome-mid),
+    inset -2px -2px 0 var(--chrome-shadow);
+  font: 700 11px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .task-start span {
+  width: 23px;
+  height: 23px;
+  margin-left: 3px;
+  background: var(--title-a);
+  font: 11px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .task-running button {
+  height: 32px;
+  border: 0;
+  background: var(--chrome-mid);
+  color: var(--ui-text);
+  box-shadow: inset 1px 1px 0 var(--chrome-shadow), inset -1px -1px 0 var(--chrome-hi);
+  font: 10px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .task-status {
+  gap: 7px;
+  padding: 3px 7px;
+  border: 1px inset var(--chrome);
+}
+
+.computer-shell .task-status .theme-switch {
+  position: static;
+  min-width: 79px;
+  height: 28px;
+  padding: 0 5px;
+}
+
+.computer-shell .task-status .theme-switch span {
+  font-size: 12px;
+}
+
+/* Boot, transmission and result screens use the same old workstation language */
+
+.boot-screen.theme-light,
+.boot-screen.theme-dark,
+.broadcast-screen.theme-light,
+.broadcast-screen.theme-dark,
+.result-screen.theme-light,
+.result-screen.theme-dark,
+.vote-screen.theme-light,
+.vote-screen.theme-dark,
+.winner-screen.theme-light,
+.winner-screen.theme-dark {
+  background:
+    radial-gradient(ellipse at center, var(--screen-glow), transparent 70%),
+    linear-gradient(var(--desk), var(--desk-deep));
+  color: var(--ui-text);
+}
+
+.boot-screen .boot-grid,
+.boot-screen .signal-bars {
+  display: none;
+}
+
+.boot-screen .boot-copy {
+  width: min(680px, calc(100% - 32px));
+  padding: 49px 38px 37px;
+  border: 0;
+  background: var(--chrome);
+  box-shadow:
+    inset 2px 2px 0 var(--chrome-hi),
+    inset -2px -2px 0 var(--chrome-dark),
+    8px 9px 0 rgba(0, 0, 0, .3);
+  color: var(--ui-text);
+}
+
+.boot-screen .boot-copy::before {
+  content: "Rede Plana — Inicialização do sistema";
+  display: block;
+  margin: -43px -32px 26px;
+  padding: 7px 8px;
+  background: linear-gradient(90deg, var(--title-a), var(--title-b));
+  color: #fff;
+  font: 700 12px Tahoma, Arial, sans-serif;
+  text-align: left;
+}
+
+.boot-screen .boot-kicker {
+  color: var(--ui-muted);
+  font-size: 10px;
+  letter-spacing: .16em;
+}
+
+.boot-screen .boot-copy h1 {
+  display: block;
+  margin: 20px 0 16px;
+  filter: none;
+  transform: none;
+  font: 700 clamp(48px, 9vw, 84px)/.8 "Arial Narrow", Tahoma, Arial, sans-serif;
+  letter-spacing: -.055em;
+  text-align: center;
+}
+
+.boot-screen .boot-copy h1 span,
+.boot-screen .boot-copy h1 strong {
+  display: block;
+  margin: 0;
+  color: var(--title-a);
+}
+
+.theme-dark .boot-copy h1 span,
+.theme-dark .boot-copy h1 strong {
+  color: var(--signal);
+}
+
+.boot-screen .boot-copy h1::after {
+  display: none;
+}
+
+.boot-screen .boot-subtitle {
+  margin: 24px auto 31px;
+  padding: 8px 12px;
+  border: 1px solid var(--chrome-shadow);
+  background: var(--surface);
+  color: var(--ui-text);
+  font-size: 10px;
+  letter-spacing: .1em;
+}
+
+.boot-screen .start-button {
+  min-width: min(300px, 85vw);
+  min-height: 52px;
+  border: 0;
+  background: var(--chrome);
+  color: var(--ui-text);
+  box-shadow:
+    inset 2px 2px 0 var(--chrome-hi),
+    inset -2px -2px 0 var(--chrome-dark),
+    inset 3px 3px 0 var(--chrome-mid),
+    inset -3px -3px 0 var(--chrome-shadow);
+  font: 700 20px Tahoma, Arial, sans-serif;
+}
+
+.boot-screen .start-button:hover {
+  transform: none;
+  box-shadow: inset 2px 2px 0 var(--chrome-dark), inset -2px -2px 0 var(--chrome-hi);
+}
+
+.boot-screen .boot-copy > p,
+.boot-screen .boot-footer {
+  color: var(--ui-muted);
+}
+
+.broadcast-screen .broadcast-top {
+  border-color: var(--chrome-shadow);
+  color: var(--ui-muted);
+}
+
+.broadcast-screen .performance-review,
+.result-screen .result-window,
+.vote-screen .vote-box,
+.winner-screen .winner-copy {
+  border: 0;
+  background: var(--surface);
+  color: var(--ui-text);
+  box-shadow:
+    inset 2px 2px 0 var(--chrome-hi),
+    inset -2px -2px 0 var(--chrome-dark),
+    7px 8px 0 rgba(0,0,0,.35);
+}
+
+.broadcast-screen .performance-review,
+.winner-screen .winner-copy {
+  padding: clamp(20px, 4vw, 42px);
+}
+
+.result-screen .result-window > p,
+.vote-screen .vote-box > p,
+.winner-screen .winner-copy > p,
+.result-screen .eliminated-callout p,
+.broadcast-screen .review-copy p {
+  color: var(--ui-muted);
+}
+
+.result-screen .summary-metrics,
+.broadcast-screen .review-stats,
+.broadcast-screen .live-chart,
+.vote-screen .vote-box {
+  border-color: var(--chrome-shadow);
+}
+
+.vote-screen .vote-cards button,
+.result-screen .eliminated-callout {
+  border-color: var(--chrome-shadow);
+  background: var(--surface-alt);
+  color: var(--ui-text);
+}
+
+.vote-screen .vote-cards button.is-selected {
+  border-color: var(--accent);
+  background: var(--title-a);
+}
+
+.crt-overlay {
+  box-shadow:
+    inset 0 0 110px rgba(0, 0, 0, .46),
+    inset 0 0 22px rgba(255, 255, 255, .06);
+  background:
+    radial-gradient(ellipse at center, transparent 58%, rgba(0, 0, 0, .32)),
+    repeating-linear-gradient(0deg, transparent 0 3px, rgba(0,0,0,.08) 4px);
+}
+
+@media (max-width: 980px) {
+  .computer-shell .app-window,
+  .computer-shell .app-mail {
+    left: 105px;
+    top: 34px;
+    width: calc(100vw - 120px);
+    height: calc(100svh - 100px);
+  }
+}
+
+@media (max-width: 720px) {
+  .theme-switch {
+    top: 7px;
+    right: 7px;
+    min-width: 88px;
+  }
+
+  .computer-shell .desktop-icons {
+    left: 4px;
+    top: 5px;
+    width: calc(100vw - 100px);
+  }
+
+  .computer-shell .app-window,
+  .computer-shell .app-mail {
+    left: 6px;
+    top: 70px;
+    width: calc(100vw - 12px);
+    height: calc(100svh - 120px);
+  }
+
+  .boot-screen .boot-copy {
+    padding: 43px 18px 25px;
+  }
+
+  .boot-screen .boot-copy::before {
+    margin: -38px -12px 22px;
+  }
+}
