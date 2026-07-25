@@ -23,6 +23,13 @@ import { useGameEngine } from "./use-game-engine";
 type ChallengeType = DomainChallengeType;
 type PersonalityTrait = DomainPersonalityTrait;
 type TraitScore = DomainTraitScore;
+import type {
+  ImportantEventBeat,
+  ImportantEventBeatRole,
+  ImportantEventEdit,
+} from "./event-models";
+import { analyzeImportantEventEdit, importantEventConstructionLabels } from "./important-event-analysis";
+import { generateWeekEvents, WEEK_ONE_SEED } from "./important-event-generation";
 type AppView = "mail" | "feed" | "challenge" | "edit";
 type Theme = "light" | "dark";
 type Phase =
@@ -89,7 +96,15 @@ type CutApproach = {
 
 type TimelineItem =
   | { id: string; kind: "ad"; title: string; duration: 4 }
-  | ({ kind: "event"; approach: CutApproach } & RecordedEvent);
+  | ({ kind: "event"; approach: CutApproach } & RecordedEvent)
+  | {
+      id: string;
+      kind: "important-event";
+      chainId: string;
+      title: string;
+      duration: number;
+      edit: ImportantEventEdit;
+    };
 
 type UiSeasonSave = {
   version: 1;
@@ -105,6 +120,7 @@ type UiSeasonSave = {
   week: number;
   timeline: TimelineItem[];
   eventApproaches: Record<string, CutApproach>;
+  importantEventEdits?: Record<string, ImportantEventEdit>;
   liveProgress: number;
   nominees: string[];
   audiencePick: string | null;
@@ -406,6 +422,21 @@ const recordedEvents: RecordedEvent[] = process.env.NEXT_PUBLIC_LEGACY_CONTENT =
   ? inlineRecordedEvents
   : extractedRecordedEvents;
 
+const weekOneEventGeneration = generateWeekEvents({
+  weekNumber: 1,
+  seed: WEEK_ONE_SEED,
+  participants,
+  secondaryEvents: recordedEvents,
+});
+
+const secondaryEvents = weekOneEventGeneration.secondaryEvents;
+const weekOneImportantEventChain = weekOneEventGeneration.importantEventChains[0] ?? null;
+const weekOneImportantEventBeats = weekOneImportantEventChain
+  ? weekOneEventGeneration.importantEventBeats
+    .filter((beat) => beat.chainId === weekOneImportantEventChain.id)
+    .sort((left, right) => left.order - right.order)
+  : [];
+
 const allParticipantIds = participants.map((participant) => participant.id);
 
 const eventParticipantIds: Record<string, string[]> = {
@@ -457,6 +488,139 @@ const inlinePartyFeed = [
 
 const introFeed = process.env.NEXT_PUBLIC_LEGACY_CONTENT === "inline" ? inlineIntroFeed : extractedIntroFeed;
 const partyFeed = process.env.NEXT_PUBLIC_LEGACY_CONTENT === "inline" ? inlinePartyFeed : extractedPartyFeed;
+
+type FeedPresentationItem =
+  | { kind: "secondary"; time: string; camera: string; title: string; body: string }
+  | { kind: "important"; time: string; camera: string; chainId: string };
+
+function withWeekOneImportantEvent(items: FeedPresentationItem[]): FeedPresentationItem[] {
+  return weekOneImportantEventChain
+    ? [
+      ...items.slice(0, 3),
+      {
+        kind: "important",
+        time: "02:04",
+        camera: "ARQUIVO · 5 CÂMERAS",
+        chainId: weekOneImportantEventChain.id,
+      },
+      ...items.slice(3),
+    ]
+    : items;
+}
+
+const importantEventRoleLabels: Record<ImportantEventBeatRole, string> = {
+  Cause: "Causa",
+  Rumor: "Rumor",
+  Discovery: "Descoberta",
+  Confrontation: "Confronto",
+  Reaction: "Reação",
+  Consequence: "Consequência",
+};
+
+function participantNames(participantIds: readonly string[]) {
+  const names = participantIds
+    .map((id) => participants.find((participant) => participant.id === id)?.name)
+    .filter((name): name is string => Boolean(name));
+  if (names.length < 2) return names.join("");
+  return `${names.slice(0, -1).join(", ")} e ${names.at(-1)}`;
+}
+
+function importantEventSummary(includeReaction: boolean) {
+  const beats = includeReaction ? weekOneImportantEventBeats : weekOneImportantEventBeats.slice(0, 4);
+  return beats.map((beat) => beat.description).join(" ");
+}
+
+function importantEventPrimaryLocations() {
+  const primaryLocations = [weekOneImportantEventBeats[0]?.location, weekOneImportantEventBeats[3]?.location]
+    .filter((location): location is string => Boolean(location));
+  return [...new Set(primaryLocations)].join(" e ");
+}
+
+const importantEventStatusLabels = {
+  not_edited: "Não editado",
+  editing: "Edição em andamento",
+  ready: "Pronto para o programa",
+} as const;
+
+const importantBeatDurationSeconds: Record<ImportantEventBeatRole, number> = {
+  Cause: 50,
+  Rumor: 45,
+  Discovery: 40,
+  Confrontation: 70,
+  Reaction: 55,
+  Consequence: 55,
+};
+
+function importantEditDuration(selectedBeatIds: readonly string[]) {
+  return weekOneImportantEventBeats
+    .filter((beat) => selectedBeatIds.includes(beat.id))
+    .reduce((total, beat) => total + importantBeatDurationSeconds[beat.role], 0);
+}
+
+function createDefaultImportantEdit(chainId: string): ImportantEventEdit {
+  const selectedBeatIds = weekOneImportantEventBeats.map((beat) => beat.id);
+  const analysis = analyzeImportantEventEdit({
+    beats: weekOneImportantEventBeats,
+    participants,
+    selectedBeatIds,
+    televisedOrder: selectedBeatIds,
+  });
+  return {
+    chainId,
+    selectedBeatIds,
+    excludedBeatIds: [],
+    televisedOrder: [...selectedBeatIds],
+    ...analysis,
+    finalDurationSeconds: importantEditDuration(selectedBeatIds),
+    status: "not_edited",
+  };
+}
+
+function withAutomaticImportantAnalysis(edit: ImportantEventEdit): ImportantEventEdit {
+  const selectedBeatIds = edit.selectedBeatIds.filter((id) => weekOneImportantEventBeats.some((beat) => beat.id === id));
+  const televisedOrder = [
+    ...edit.televisedOrder.filter((id) => selectedBeatIds.includes(id)),
+    ...selectedBeatIds.filter((id) => !edit.televisedOrder.includes(id)),
+  ];
+  const excludedBeatIds = weekOneImportantEventBeats
+    .map((beat) => beat.id)
+    .filter((id) => !selectedBeatIds.includes(id));
+  const analysis = analyzeImportantEventEdit({
+    beats: weekOneImportantEventBeats,
+    participants,
+    selectedBeatIds,
+    televisedOrder,
+  });
+  return {
+    ...edit,
+    selectedBeatIds,
+    excludedBeatIds,
+    televisedOrder,
+    ...analysis,
+    finalDurationSeconds: importantEditDuration(selectedBeatIds),
+  };
+}
+
+function formatClockDuration(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function orderedImportantBeats(edit: ImportantEventEdit) {
+  const selected = edit.televisedOrder
+    .map((id) => weekOneImportantEventBeats.find((beat) => beat.id === id))
+    .filter((beat): beat is ImportantEventBeat => Boolean(beat));
+  const excluded = weekOneImportantEventBeats.filter((beat) => edit.excludedBeatIds.includes(beat.id));
+  return [...selected, ...excluded];
+}
+
+function importantMainFocusLabel(participantIds: readonly string[]) {
+  if (participantIds.length === 0) return "Sem foco claro";
+  if (participantIds.length === 1) return participantNames(participantIds);
+  if (participantIds.length === 2) return `Dividido entre ${participantNames(participantIds)}`;
+  return `Foco no conjunto: ${participantNames(participantIds)}`;
+}
 
 const FEED_REFRESH_MS = 3500;
 const UI_SAVE_KEY = "rede-plana-ui-season";
@@ -521,6 +685,60 @@ function ThemeSwitch({ theme, onToggle }: { theme: Theme; onToggle: () => void }
   );
 }
 
+function NarrativeParticipantValue({
+  participantIds,
+  emptyLabel,
+  focus = false,
+}: {
+  participantIds: readonly string[];
+  emptyLabel: string;
+  focus?: boolean;
+}) {
+  const selectedParticipants = participantIds
+    .map((id) => participants.find((participant) => participant.id === id))
+    .filter((participant): participant is Participant => Boolean(participant));
+
+  return (
+    <div className="narrative-participant-value">
+      {selectedParticipants.length > 0 && (
+        <div aria-hidden="true">
+          {selectedParticipants.map((participant) => <Avatar key={participant.id} participant={participant} size="small" />)}
+        </div>
+      )}
+      <b>{selectedParticipants.length === 0
+        ? emptyLabel
+        : focus
+          ? importantMainFocusLabel(participantIds)
+          : participantNames(participantIds)}</b>
+    </div>
+  );
+}
+
+function RestartGameControl({ onConfirm }: { onConfirm: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+
+  return (
+    <>
+      <button className="restart-game-button" onClick={() => setConfirming(true)} type="button">
+        <span aria-hidden="true">↻</span> RECOMEÇAR
+      </button>
+      {confirming && (
+        <div className="restart-confirm-backdrop" role="presentation">
+          <section aria-labelledby="restart-game-title" aria-modal="true" className="restart-confirm-dialog" role="dialog">
+            <span className="restart-confirm-icon" aria-hidden="true">!</span>
+            <h2 id="restart-game-title">Recomeçar temporada?</h2>
+            <p>Todo o progresso salvo será apagado. O jogo voltará ao início da Semana 1.</p>
+            <div className="restart-confirm-actions">
+              <button className="button" onClick={() => setConfirming(false)} type="button">Cancelar</button>
+              <button className="button button-primary" onClick={onConfirm} type="button">Recomeçar da Semana 1</button>
+            </div>
+          </section>
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function Home() {
   const engineMode = process.env.NEXT_PUBLIC_EVENT_ENGINE_MODE === "legacy" ? "legacy" : "dynamic";
   const [shadowGameState, dispatchGame, engineControls] = useGameEngine("rede-plana-dynamic-v1", engineMode);
@@ -529,6 +747,7 @@ export default function Home() {
   const [phase, setPhase] = useState<Phase>("email");
   const [view, setView] = useState<AppView>("mail");
   const [pdfOpen, setPdfOpen] = useState(false);
+  const [openImportantChainId, setOpenImportantChainId] = useState<string | null>(null);
   const [windowOpen, setWindowOpen] = useState(true);
   const [feedCount, setFeedCount] = useState(0);
   const [partyCount, setPartyCount] = useState(0);
@@ -538,6 +757,9 @@ export default function Home() {
   const [week, setWeek] = useState(1);
   const [timeline, setTimeline] = useState<TimelineItem[]>(adSlots);
   const [eventApproaches, setEventApproaches] = useState<Record<string, CutApproach>>({});
+  const [importantEventEdits, setImportantEventEdits] = useState<Record<string, ImportantEventEdit>>({});
+  const [editingImportantChainId, setEditingImportantChainId] = useState<string | null>(null);
+  const [importantEditError, setImportantEditError] = useState("");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("Todos");
   const [sort, setSort] = useState("gravacao");
@@ -578,6 +800,7 @@ export default function Home() {
         setWeek(saved.week);
         setTimeline(saved.timeline);
         setEventApproaches(saved.eventApproaches);
+        setImportantEventEdits(saved.importantEventEdits ?? {});
         setLiveProgress(saved.liveProgress);
         setNominees(saved.nominees);
         setAudiencePick(saved.audiencePick);
@@ -605,6 +828,7 @@ export default function Home() {
       week,
       timeline,
       eventApproaches,
+      importantEventEdits,
       liveProgress,
       nominees,
       audiencePick,
@@ -617,6 +841,7 @@ export default function Home() {
     audiencePick,
     challengeType,
     eventApproaches,
+    importantEventEdits,
     feedCount,
     lastEliminatedId,
     leaderId,
@@ -638,6 +863,17 @@ export default function Home() {
     const frame = window.requestAnimationFrame(() => setTheme(savedTheme));
     return () => window.cancelAnimationFrame(frame);
   }, []);
+
+  useEffect(() => {
+    if (!openImportantChainId && !editingImportantChainId) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (editingImportantChainId) setEditingImportantChainId(null);
+      else setOpenImportantChainId(null);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [editingImportantChainId, openImportantChainId]);
 
   function toggleTheme() {
     setTheme((current) => {
@@ -661,6 +897,27 @@ export default function Home() {
   const challengeRunnerUp = latestChallengeResult?.standings[1]
     ? participants.find((participant) => participant.id === latestChallengeResult.standings[1].participantId) ?? null
     : null;
+  const openImportantChain = weekOneEventGeneration.importantEventChains
+    .find((chain) => chain.id === openImportantChainId) ?? null;
+  const openImportantBeats = openImportantChain
+    ? weekOneEventGeneration.importantEventBeats
+      .filter((beat) => beat.chainId === openImportantChain.id)
+      .sort((left, right) => left.order - right.order)
+    : [];
+  const openImportantParticipants = openImportantChain
+    ? participants.filter((participant) => openImportantChain.participantIds.includes(participant.id))
+    : [];
+  const editingImportantChain = weekOneEventGeneration.importantEventChains
+    .find((chain) => chain.id === editingImportantChainId) ?? null;
+  const editingImportantEdit = editingImportantChain
+    ? importantEventEdits[editingImportantChain.id] ?? null
+    : null;
+  const editingImportantBeats = editingImportantEdit ? orderedImportantBeats(editingImportantEdit) : [];
+  const editingImportantParticipants = editingImportantChain
+    ? editingImportantChain.participantIds
+      .map((id) => participants.find((participant) => participant.id === id))
+      .filter((participant): participant is Participant => Boolean(participant))
+    : [];
 
   const isEditPhase = phase === "editPremiere" || phase === "editChallenge" || phase === "editVote" || phase === "editElimination" || phase === "editFinal";
   const isLivePhase = phase === "livePremiere" || phase === "liveChallenge" || phase === "liveVote" || phase === "liveElimination" || phase === "liveFinal";
@@ -708,7 +965,7 @@ export default function Home() {
     const dynamicEpisode = phase === "editPremiere" || phase === "editChallenge" || phase === "editVote" || phase === "editElimination" || phase === "editFinal";
     let events: RecordedEvent[] = dynamicEpisode && shadowGameState.mode === "dynamic" && dynamicEvents.length >= 2
       ? dynamicEvents
-      : recordedEvents.filter((event) => ids.includes(event.id) && !selectedIds.has(event.id));
+      : secondaryEvents.filter((event) => ids.includes(event.id) && !selectedIds.has(event.id));
     if (category !== "Todos") events = events.filter((event) => event.category === category);
     if (search.trim()) {
       const query = search.toLocaleLowerCase("pt-BR");
@@ -717,8 +974,11 @@ export default function Home() {
     return sort === "duracao" ? [...events].sort((a, b) => a.duration - b.duration) : events;
   }, [phase, timeline, category, search, sort, shadowGameState, week]);
 
-  const timelineDuration = timeline.reduce((sum, item) => sum + item.duration, 0);
-  const eventCount = timeline.filter((item) => item.kind === "event").length;
+  const timelineDurationSeconds = timeline.reduce(
+    (sum, item) => sum + (item.kind === "important-event" ? item.edit.finalDurationSeconds : item.duration * 60),
+    0,
+  );
+  const eventCount = timeline.filter((item) => item.kind === "event" || item.kind === "important-event").length;
   const plannedCuts = useMemo(() => {
     const knownEventIds = new Set(shadowGameState.house.eventHistory.map((event) => event.id));
     return timeline
@@ -840,6 +1100,99 @@ export default function Home() {
         .join(" + ");
     const toneLabel = toneOptions.find((option) => option.value === item.approach.tone)?.label ?? "Neutro";
     return `${perspectiveLabel} · ${toneLabel}`;
+  }
+
+  function openImportantEventEditor(chainId: string) {
+    setImportantEventEdits((current) => {
+      const existing = withAutomaticImportantAnalysis(current[chainId] ?? createDefaultImportantEdit(chainId));
+      return {
+        ...current,
+        [chainId]: { ...existing, status: "editing" },
+      };
+    });
+    setImportantEditError("");
+    setEditingImportantChainId(chainId);
+  }
+
+  function updateImportantEventEdit(
+    chainId: string,
+    update: (current: ImportantEventEdit) => ImportantEventEdit,
+  ) {
+    setImportantEventEdits((current) => {
+      const existing = current[chainId] ?? createDefaultImportantEdit(chainId);
+      const next = withAutomaticImportantAnalysis(update(existing));
+      return {
+        ...current,
+        [chainId]: {
+          ...next,
+          status: "editing",
+        },
+      };
+    });
+    setImportantEditError("");
+  }
+
+  function toggleImportantBeat(chainId: string, beatId: string) {
+    updateImportantEventEdit(chainId, (current) => {
+      const included = current.selectedBeatIds.includes(beatId);
+      const selectedBeatIds = included
+        ? current.selectedBeatIds.filter((id) => id !== beatId)
+        : [...current.selectedBeatIds, beatId];
+      const televisedOrder = included
+        ? current.televisedOrder.filter((id) => id !== beatId)
+        : [...current.televisedOrder, beatId];
+      const excludedBeatIds = weekOneImportantEventBeats
+        .map((beat) => beat.id)
+        .filter((id) => !selectedBeatIds.includes(id));
+      return { ...current, selectedBeatIds, excludedBeatIds, televisedOrder };
+    });
+  }
+
+  function restartSeason() {
+    engineControls.resetSeason();
+    window.localStorage.removeItem(UI_SAVE_KEY);
+    window.location.reload();
+  }
+
+  function moveImportantBeat(chainId: string, beatId: string, direction: -1 | 1) {
+    updateImportantEventEdit(chainId, (current) => {
+      const index = current.televisedOrder.indexOf(beatId);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= current.televisedOrder.length) return current;
+      const televisedOrder = [...current.televisedOrder];
+      [televisedOrder[index], televisedOrder[nextIndex]] = [televisedOrder[nextIndex], televisedOrder[index]];
+      return { ...current, televisedOrder };
+    });
+  }
+
+  function confirmImportantEventEdit() {
+    if (!editingImportantChain || !editingImportantEdit) return;
+    if (editingImportantEdit.selectedBeatIds.length === 0) {
+      setImportantEditError("Inclua pelo menos um momento antes de salvar a versão.");
+      return;
+    }
+
+    const readyEdit: ImportantEventEdit = {
+      ...withAutomaticImportantAnalysis(editingImportantEdit),
+      status: "ready",
+    };
+    const timelineId = `important-cut-${editingImportantChain.id}`;
+    const timelineItem: TimelineItem = {
+      id: timelineId,
+      kind: "important-event",
+      chainId: editingImportantChain.id,
+      title: editingImportantChain.title,
+      duration: readyEdit.finalDurationSeconds / 60,
+      edit: readyEdit,
+    };
+
+    setImportantEventEdits((current) => ({ ...current, [editingImportantChain.id]: readyEdit }));
+    setTimeline((current) => current.some((item) => item.id === timelineId)
+      ? current.map((item) => item.id === timelineId ? timelineItem : item)
+      : [...current, timelineItem]);
+    setEditingImportantChainId(null);
+    setImportantEditError("");
+    setEditorError("");
   }
 
   function addEvent(event: RecordedEvent) {
@@ -975,9 +1328,10 @@ export default function Home() {
       || phase === "weekSummary";
     const generatedCount = partyPhase ? dynamicPartyFeed.length : dynamicIntroFeed.length;
     const legacyCount = partyPhase ? partyFeed.length : introFeed.length;
-    const itemCount = engineControls.ready && shadowGameState.mode === "dynamic" && generatedCount > 0
+    const baseItemCount = engineControls.ready && shadowGameState.mode === "dynamic" && generatedCount > 0
       ? generatedCount
       : legacyCount;
+    const itemCount = baseItemCount + (partyPhase && week === 1 && weekOneImportantEventChain ? 1 : 0);
     const currentCount = partyPhase ? partyCount : feedCount;
     if (currentCount >= itemCount) return;
 
@@ -998,6 +1352,7 @@ export default function Home() {
     phase,
     shadowGameState.mode,
     view,
+    week,
     windowOpen,
   ]);
 
@@ -1066,9 +1421,11 @@ export default function Home() {
     const isParty = phase === "feedParty" || phase === "editVote" || phase === "liveVote" || phase === "audienceVote" || phase === "editElimination" || phase === "liveElimination" || phase === "weekSummary";
     const generatedItems = isParty ? dynamicPartyFeed : dynamicIntroFeed;
     const legacyItems = isParty ? partyFeed : introFeed;
-    const items = engineControls.ready && shadowGameState.mode === "dynamic" && generatedItems.length > 0
+    const sourceItems = engineControls.ready && shadowGameState.mode === "dynamic" && generatedItems.length > 0
       ? generatedItems
       : legacyItems;
+    const secondaryItems: FeedPresentationItem[] = sourceItems.map((item) => ({ kind: "secondary", ...item }));
+    const items = isParty && week === 1 ? withWeekOneImportantEvent(secondaryItems) : secondaryItems;
     const count = isParty ? partyCount : feedCount;
     const setCount = isParty ? setPartyCount : setFeedCount;
     return (
@@ -1090,18 +1447,49 @@ export default function Home() {
           ))}
         </div>
         <div className="feed-log" aria-live="polite">
-          {items.slice(0, count).map((item, index) => (
-            <article className="feed-entry" key={item.time}>
-              <time>{item.time}</time>
-              <div className="feed-line" />
-              <div>
-                <span>{item.camera}</span>
-                <h3>{item.title}</h3>
-                <p>{item.body}</p>
-              </div>
-              <strong>{String(index + 1).padStart(2, "0")}</strong>
-            </article>
-          ))}
+          {items.slice(0, count).map((item, index) => {
+            if (item.kind === "important") {
+              const chain = weekOneEventGeneration.importantEventChains.find((candidate) => candidate.id === item.chainId);
+              if (!chain) return null;
+              const chainParticipants = chain.participantIds
+                .map((id) => participants.find((participant) => participant.id === id))
+                .filter((participant): participant is Participant => Boolean(participant));
+              return (
+                <article className="feed-entry important-feed-card" key={item.chainId}>
+                  <time>{item.time}</time>
+                  <div className="important-feed-card-content">
+                    <span className="important-event-badge"><b aria-hidden="true">!</b> ACONTECIMENTO IMPORTANTE</span>
+                    <small>{item.camera}</small>
+                    <h3>{chain.title}</h3>
+                    <p>{importantEventSummary(false)}</p>
+                    <div className="important-card-facts">
+                      <div className="important-card-portraits" aria-label={`Participantes: ${participantNames(chain.participantIds)}`}>
+                        {chainParticipants.map((participant) => <Avatar key={participant.id} participant={participant} size="small" />)}
+                      </div>
+                      <span><b>Participantes:</b> {participantNames(chain.participantIds)}</span>
+                      <span><b>Locais principais:</b> {importantEventPrimaryLocations()}</span>
+                      <span><b>Momentos registrados:</b> {weekOneImportantEventBeats.length}</span>
+                    </div>
+                    <button onClick={() => setOpenImportantChainId(chain.id)} type="button">Abrir acontecimento</button>
+                  </div>
+                  <strong>{String(index + 1).padStart(2, "0")}</strong>
+                </article>
+              );
+            }
+
+            return (
+              <article className="feed-entry" key={`${item.time}-${item.title}`}>
+                <time>{item.time}</time>
+                <div className="feed-line" />
+                <div>
+                  <span>{item.camera}</span>
+                  <h3>{item.title}</h3>
+                  <p>{item.body}</p>
+                </div>
+                <strong>{String(index + 1).padStart(2, "0")}</strong>
+              </article>
+            );
+          })}
           {count === 0 && (
             <div className="feed-empty">
               <div className="signal-loader" aria-hidden="true"><i /><i /><i /></div>
@@ -1258,6 +1646,16 @@ export default function Home() {
         : phase === "editVote" ? "Formação da votação"
           : phase === "editElimination" ? "Noite de eliminação"
             : "Grande final";
+    const importantEdit = weekOneImportantEventChain
+      ? importantEventEdits[weekOneImportantEventChain.id] ?? null
+      : null;
+    const importantCardEdit = weekOneImportantEventChain
+      ? importantEdit ?? createDefaultImportantEdit(weekOneImportantEventChain.id)
+      : null;
+    const importantBlockInTimeline = weekOneImportantEventChain
+      ? timeline.some((item) => item.kind === "important-event" && item.chainId === weekOneImportantEventChain.id)
+      : false;
+    const showImportantFootage = week === 1 && Boolean(weekOneImportantEventChain && importantCardEdit);
     return (
       <div className="editor-panel">
         <div className="editor-heading">
@@ -1267,7 +1665,7 @@ export default function Home() {
           </div>
           <div className="runtime">
             <span>DURAÇÃO</span>
-            <b>{timelineDuration}:00</b>
+            <b>{formatClockDuration(timelineDurationSeconds)}</b>
             <small>4 intervalos fixos · 16 min</small>
           </div>
         </div>
@@ -1296,17 +1694,35 @@ export default function Home() {
               >
                 <div className="timeline-index">{String(index + 1).padStart(2, "0")}</div>
                 <div>
-                  <span>{item.kind === "ad" ? "COMERCIAL · FIXO" : item.category}</span>
+                  <span>
+                    {item.kind === "ad"
+                      ? "COMERCIAL · FIXO"
+                      : item.kind === "important-event"
+                        ? "ACONTECIMENTO IMPORTANTE"
+                        : item.category}
+                  </span>
                   <h3>{item.title}</h3>
-                  <small>{item.duration} min</small>
+                  <small>{item.kind === "important-event" ? formatClockDuration(item.edit.finalDurationSeconds) : `${item.duration} min`}</small>
                   {item.kind === "event" && week >= 2 && (
                     <small className="timeline-approach">{approachSummary(item)}</small>
+                  )}
+                  {item.kind === "important-event" && (
+                    <small className="timeline-important-summary">
+                      Foco: {importantMainFocusLabel(withAutomaticImportantAnalysis(item.edit).mainFocusParticipantIds)}
+                      <br />
+                      Construção: {importantEventConstructionLabels[withAutomaticImportantAnalysis(item.edit).detectedEditorialConstruction]}
+                      <br />
+                      Momentos utilizados: {item.edit.selectedBeatIds.length} de {weekOneImportantEventBeats.length}
+                    </small>
                   )}
                 </div>
                 <div className="timeline-controls">
                   <button aria-label={`Mover ${item.title} para a esquerda`} disabled={index === 0} onClick={() => moveItem(index, -1)} type="button">←</button>
                   <button aria-label={`Mover ${item.title} para a direita`} disabled={index === timeline.length - 1} onClick={() => moveItem(index, 1)} type="button">→</button>
-                  {item.kind === "event" && (
+                  {item.kind === "important-event" && (
+                    <button aria-label={`Editar ${item.title}`} onClick={() => openImportantEventEditor(item.chainId)} type="button">✎</button>
+                  )}
+                  {item.kind !== "ad" && (
                     <button aria-label={`Remover ${item.title}`} onClick={() => removeEvent(item.id)} type="button">×</button>
                   )}
                 </div>
@@ -1319,7 +1735,7 @@ export default function Home() {
         <section className="event-bank">
           <div className="section-label">
             <span>Acontecimentos gravados</span>
-            <small>{availableEvents.length} cortes disponíveis</small>
+            <small>{availableEvents.length + (showImportantFootage ? 1 : 0)} cortes disponíveis</small>
           </div>
           <div className="event-filters">
             <label>
@@ -1343,6 +1759,30 @@ export default function Home() {
             </label>
           </div>
           <div className={`event-grid${week >= 2 ? " event-grid-approach" : ""}`}>
+            {showImportantFootage && weekOneImportantEventChain && importantCardEdit && (
+              <article className="event-card important-footage-card">
+                <div className="important-footage-heading">
+                  <span className="important-event-badge"><b aria-hidden="true">!</b> ACONTECIMENTO IMPORTANTE</span>
+                  <i>{importantBlockInTimeline ? "NA TIMELINE" : importantEventStatusLabels[importantEdit?.status ?? "not_edited"]}</i>
+                </div>
+                <h3>{weekOneImportantEventChain.title}</h3>
+                <div className="important-footage-participants">
+                  {weekOneImportantEventChain.participantIds.map((id) => {
+                    const participant = participants.find((candidate) => candidate.id === id);
+                    return participant ? <Avatar key={participant.id} participant={participant} size="small" /> : null;
+                  })}
+                  <span>{participantNames(weekOneImportantEventChain.participantIds)}</span>
+                </div>
+                <dl>
+                  <div><dt>Momentos gravados</dt><dd>{weekOneImportantEventBeats.length}</dd></div>
+                  <div><dt>Duração estimada</dt><dd>{formatClockDuration(importantCardEdit.finalDurationSeconds)}</dd></div>
+                  <div><dt>Status da edição</dt><dd>{importantEventStatusLabels[importantEdit?.status ?? "not_edited"]}</dd></div>
+                </dl>
+                <button onClick={() => openImportantEventEditor(weekOneImportantEventChain.id)} type="button">
+                  Editar acontecimento
+                </button>
+              </article>
+            )}
             {availableEvents.map((event) => (
               <article
                 className={`event-card${event.requiredAnchor ? " is-required" : ""}`}
@@ -1368,7 +1808,7 @@ export default function Home() {
                 </button>
               </article>
             ))}
-            {availableEvents.length === 0 && <p className="no-results">Nenhum corte corresponde aos filtros.</p>}
+            {availableEvents.length === 0 && !showImportantFootage && <p className="no-results">Nenhum corte corresponde aos filtros.</p>}
           </div>
         </section>
         <div className="panel-actions sticky-actions">
@@ -1442,6 +1882,7 @@ export default function Home() {
     return (
       <main className={`broadcast-screen theme-${theme}`}>
         <ThemeSwitch onToggle={toggleTheme} theme={theme} />
+        <RestartGameControl onConfirm={restartSeason} />
         <div className="broadcast-top">
           <div className="on-air"><i /> AO VIVO</div>
           <span>CASA VIGIADA · SEMANA {String(week).padStart(2, "0")}</span>
@@ -1479,6 +1920,7 @@ export default function Home() {
     return (
       <main className={`result-screen theme-${theme}`}>
         <ThemeSwitch onToggle={toggleTheme} theme={theme} />
+        <RestartGameControl onConfirm={restartSeason} />
         <div className="result-window">
           <span className="eyebrow">RELATÓRIO DE EXIBIÇÃO · EPISÓDIO {String(week * 3 - 2).padStart(2, "0")}</span>
           <h1>{premiere ? "Uma estreia acima da meta." : `A liderança da semana ${week} está definida.`}</h1>
@@ -1528,6 +1970,7 @@ export default function Home() {
     return (
       <main className={`vote-screen theme-${theme}`}>
         <ThemeSwitch onToggle={toggleTheme} theme={theme} />
+        <RestartGameControl onConfirm={restartSeason} />
         <div className="vote-brand"><span>CASA</span><b>VIGIADA</b><small>VOTAÇÃO DO PÚBLICO</small></div>
         <section className="vote-box">
           <span className="eyebrow">{phase === "winnerVote" ? "GRANDE FINAL" : `SEMANA ${String(week).padStart(2, "0")} · VOTAÇÃO ABERTA`}</span>
@@ -1572,6 +2015,7 @@ export default function Home() {
     return (
       <main className={`result-screen week-result theme-${theme}`}>
         <ThemeSwitch onToggle={toggleTheme} theme={theme} />
+        <RestartGameControl onConfirm={restartSeason} />
         <div className="result-window">
           <span className="eyebrow">ARQUIVO SEMANAL · SEMANA {String(week).padStart(2, "0")}</span>
           <h1>{finalists ? "Temos os três finalistas." : `Semana ${week} encerrada.`}</h1>
@@ -1607,6 +2051,7 @@ export default function Home() {
     return (
       <main className={`winner-screen theme-${theme}`}>
         <ThemeSwitch onToggle={toggleTheme} theme={theme} />
+        <RestartGameControl onConfirm={restartSeason} />
         <div className="confetti" aria-hidden="true">{Array.from({ length: 28 }).map((_, index) => <i key={index} />)}</div>
         <div className="winner-copy">
           <span className="eyebrow">CASA VIGIADA · FINAL DA TEMPORADA</span>
@@ -1622,11 +2067,7 @@ export default function Home() {
           </div>
           <button
             className="button button-primary"
-            onClick={() => {
-              engineControls.resetSeason();
-              window.localStorage.removeItem(UI_SAVE_KEY);
-              window.location.reload();
-            }}
+            onClick={restartSeason}
             type="button"
           >
             Jogar novamente
@@ -1638,6 +2079,7 @@ export default function Home() {
 
   return (
     <main className={`computer-shell theme-${theme}`} data-shadow-revision={shadowGameState.revision}>
+      <RestartGameControl onConfirm={restartSeason} />
       <div className="desktop-wallpaper" aria-hidden="true"><span>RPT</span><b>PRODUÇÃO<br />CASA VIGIADA</b></div>
       <aside className="desktop-icons" aria-label="Aplicativos">
         <AppIcon active={view === "mail"} label="Correio" onClick={() => { setView("mail"); setWindowOpen(true); }} symbol="✉" />
@@ -1752,7 +2194,226 @@ export default function Home() {
           </section>
         </div>
       )}
-      <GameInspector actionLog={engineControls.actionLog} state={shadowGameState} />
+      {process.env.NEXT_PUBLIC_SHOW_GAME_INSPECTOR === "true" && (
+        <GameInspector actionLog={engineControls.actionLog} state={shadowGameState} />
+      )}
+      {editingImportantChain && editingImportantEdit && (
+        <div className="modal-backdrop important-editor-backdrop" role="presentation">
+          <section
+            aria-label={`Editor interno: ${editingImportantChain.title}`}
+            aria-modal="true"
+            className="important-internal-editor"
+            role="dialog"
+          >
+            <header className="important-event-titlebar">
+              <div>
+                <span aria-hidden="true">!</span>
+                <b>Editor interno de acontecimento</b>
+              </div>
+              <button aria-label="Fechar editor interno" onClick={() => setEditingImportantChainId(null)} type="button">×</button>
+            </header>
+
+            <div className="important-internal-body">
+              <div className="important-editor-story">
+                <div>
+                  <span className="important-event-badge"><b aria-hidden="true">!</b> ACONTECIMENTO IMPORTANTE</span>
+                  <h2>{editingImportantChain.title}</h2>
+                  <p>{importantEventSummary(true)}</p>
+                </div>
+                <div className="important-editor-story-cast">
+                  {editingImportantParticipants.map((participant) => (
+                    <div key={participant.id}>
+                      <Avatar participant={participant} size="small" />
+                      <span>{participant.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="important-editor-layout">
+                <section className="important-moment-editor" aria-labelledby="moment-editor-title">
+                  <div className="important-editor-section-heading">
+                    <div><small>MONTAGEM INTERNA</small><h3 id="moment-editor-title">Momentos do acontecimento</h3></div>
+                    <span>{editingImportantEdit.selectedBeatIds.length} de {weekOneImportantEventBeats.length} incluídos</span>
+                  </div>
+                  <p className="important-editor-instruction">Inclua, exclua e reorganize os momentos. A ordem original da casa permanece preservada.</p>
+                  <ol className="important-edit-beat-list">
+                    {editingImportantBeats.map((beat) => {
+                      const included = editingImportantEdit.selectedBeatIds.includes(beat.id);
+                      const televisedIndex = editingImportantEdit.televisedOrder.indexOf(beat.id);
+                      return (
+                        <li className={included ? "is-included" : "is-excluded"} key={beat.id}>
+                          <div className="important-edit-beat-index">
+                            <b>{included ? String(televisedIndex + 1).padStart(2, "0") : "—"}</b>
+                            <small>ORIGINAL {String(beat.order).padStart(2, "0")}</small>
+                          </div>
+                          <div className="important-edit-beat-copy">
+                            <span>{importantEventRoleLabels[beat.role]}</span>
+                            <h4>{beat.title}</h4>
+                            <p>{beat.description}</p>
+                            <small><b>{participantNames(beat.participantIds)}</b><i>·</i>{beat.location}</small>
+                          </div>
+                          <div className="important-edit-beat-actions">
+                            <button
+                              aria-pressed={included}
+                              className={included ? "is-active" : ""}
+                              onClick={() => toggleImportantBeat(editingImportantChain.id, beat.id)}
+                              type="button"
+                            >
+                              {included ? "Incluído" : "Excluído"}
+                            </button>
+                            <div>
+                              <button
+                                aria-label={`Mover ${beat.title} para cima`}
+                                disabled={!included || televisedIndex === 0}
+                                onClick={() => moveImportantBeat(editingImportantChain.id, beat.id, -1)}
+                                type="button"
+                              >↑</button>
+                              <button
+                                aria-label={`Mover ${beat.title} para baixo`}
+                                disabled={!included || televisedIndex === editingImportantEdit.televisedOrder.length - 1}
+                                onClick={() => moveImportantBeat(editingImportantChain.id, beat.id, 1)}
+                                type="button"
+                              >↓</button>
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </section>
+
+                <aside className="important-editor-settings">
+                  <section className="important-narrative-reading" aria-live="polite">
+                    <div className="important-editor-section-heading">
+                      <div><small>ANÁLISE AUTOMÁTICA</small><h3>Leitura da edição</h3></div>
+                      <span>ATUALIZAÇÃO AO VIVO</span>
+                    </div>
+                    <div className="narrative-reading-grid">
+                      <article>
+                        <span>Foco principal</span>
+                        <NarrativeParticipantValue
+                          emptyLabel="Sem foco claro"
+                          focus
+                          participantIds={editingImportantEdit.mainFocusParticipantIds}
+                        />
+                      </article>
+                      <article>
+                        <span>Favorecido pela edição</span>
+                        <NarrativeParticipantValue
+                          emptyLabel="Ninguém"
+                          participantIds={editingImportantEdit.favoredParticipantIds}
+                        />
+                      </article>
+                      <article>
+                        <span>Prejudicado pela edição</span>
+                        <NarrativeParticipantValue
+                          emptyLabel="Ninguém"
+                          participantIds={editingImportantEdit.harmedParticipantIds}
+                        />
+                      </article>
+                      <article>
+                        <span>Construção detectada</span>
+                        <strong>{importantEventConstructionLabels[editingImportantEdit.detectedEditorialConstruction]}</strong>
+                      </article>
+                      <article className="narrative-reading-wide">
+                        <span>Contexto omitido</span>
+                        <p>{editingImportantEdit.missingContextDescription}</p>
+                      </article>
+                      <article className="narrative-reading-wide narrative-reading-summary">
+                        <span>Resumo da versão</span>
+                        <p>{editingImportantEdit.versionSummary}</p>
+                      </article>
+                    </div>
+                    <dl className="narrative-reading-metrics">
+                      <div><dt>Duração final</dt><dd>{formatClockDuration(editingImportantEdit.finalDurationSeconds)}</dd></div>
+                      <div><dt>Momentos</dt><dd>{editingImportantEdit.selectedBeatIds.length} / {weekOneImportantEventBeats.length}</dd></div>
+                    </dl>
+                  </section>
+                </aside>
+              </div>
+            </div>
+
+            <footer className="important-internal-footer">
+              <span className={importantEditError ? "editor-error" : "status-note"}>
+                {importantEditError || "A montagem altera somente a versão exibida no programa."}
+              </span>
+              <div>
+                <button onClick={() => setEditingImportantChainId(null)} type="button">Continuar depois</button>
+                <button className="button button-primary" onClick={confirmImportantEventEdit} type="button">Salvar versão na timeline</button>
+              </div>
+            </footer>
+          </section>
+        </div>
+      )}
+      {openImportantChain && (
+        <div className="modal-backdrop important-event-backdrop" role="presentation">
+          <section
+            aria-label={`Acontecimento importante: ${openImportantChain.title}`}
+            aria-modal="true"
+            className="important-event-window"
+            role="dialog"
+          >
+            <header className="important-event-titlebar">
+              <div>
+                <span aria-hidden="true">!</span>
+                <b>Arquivo de acontecimento importante</b>
+              </div>
+              <button aria-label="Fechar acontecimento" onClick={() => setOpenImportantChainId(null)} type="button">×</button>
+            </header>
+            <div className="important-event-detail">
+              <div className="important-event-story-heading">
+                <span className="important-event-badge"><b aria-hidden="true">!</b> ACONTECIMENTO IMPORTANTE</span>
+                <h2>{openImportantChain.title}</h2>
+                <p>{importantEventSummary(true)}</p>
+              </div>
+
+              <section className="important-event-participants" aria-labelledby="important-participants-title">
+                <div className="important-detail-section-title">
+                  <span>01</span>
+                  <div><small>ENVOLVIDOS</small><h3 id="important-participants-title">Participantes</h3></div>
+                </div>
+                <div className="important-participant-list">
+                  {openImportantParticipants.map((participant) => (
+                    <div key={participant.id}>
+                      <Avatar participant={participant} size="medium" />
+                      <b>{participant.name}</b>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="important-event-sequence" aria-labelledby="important-sequence-title">
+                <div className="important-detail-section-title">
+                  <span>02</span>
+                  <div><small>ORDEM CRONOLÓGICA</small><h3 id="important-sequence-title">Sequência do acontecimento</h3></div>
+                </div>
+                <ol>
+                  {openImportantBeats.map((beat) => (
+                    <li key={beat.id}>
+                      <div className="important-beat-order" aria-hidden="true">{String(beat.order).padStart(2, "0")}</div>
+                      <div className="important-beat-copy">
+                        <span>{importantEventRoleLabels[beat.role]}</span>
+                        <h4>{beat.title}</h4>
+                        <p>{beat.description}</p>
+                        <small>
+                          <b>Participantes:</b> {participantNames(beat.participantIds)}
+                          <i aria-hidden="true">·</i>
+                          <b>Local:</b> {beat.location}
+                        </small>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            </div>
+            <footer>
+              <span>{openImportantBeats.length} momentos registrados · Semana {String(openImportantChain.weekNumber).padStart(2, "0")}</span>
+              <button onClick={() => setOpenImportantChainId(null)} type="button">Fechar</button>
+            </footer>
+          </section>
+        </div>
+      )}
       <div className="crt-overlay" aria-hidden="true" />
     </main>
   );

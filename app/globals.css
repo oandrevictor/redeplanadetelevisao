@@ -2569,6 +2569,549 @@ select:focus-visible {
   }
 }
 
+/* Internal edit for the single Week 1 Important Event. */
+
+.computer-shell .important-footage-card {
+  grid-column: span 2;
+  min-height: 190px;
+  padding: 11px 12px 46px;
+  border-left: 5px solid #bd3f32;
+  background:
+    repeating-linear-gradient(-45deg, transparent 0 10px, color-mix(in srgb, #bd3f32 6%, transparent) 10px 11px),
+    color-mix(in srgb, var(--surface) 93%, #f1c35a);
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-hi),
+    inset -1px -1px 0 var(--chrome-shadow),
+    2px 2px 0 color-mix(in srgb, #bd3f32 35%, transparent);
+}
+
+.computer-shell .important-footage-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.computer-shell .important-footage-heading > i {
+  padding: 3px 5px;
+  border: 1px solid var(--chrome-shadow);
+  background: var(--surface-alt);
+  color: var(--ui-muted);
+  font: 700 7px "Courier New", monospace;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.computer-shell .important-footage-card h3 {
+  margin: 9px 0 7px;
+  font-size: 18px;
+}
+
+.computer-shell .important-footage-participants {
+  display: flex;
+  align-items: center;
+  min-height: 35px;
+  margin-bottom: 8px;
+  padding-left: 6px;
+}
+
+.computer-shell .important-footage-participants .avatar-small {
+  width: 34px;
+  height: 34px;
+  margin-left: -6px;
+  border: 2px solid var(--surface);
+}
+
+.computer-shell .important-footage-participants > span {
+  margin-left: 7px;
+  color: var(--ui-text);
+  font: 9px/1.2 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-footage-card dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  margin: 0;
+}
+
+.computer-shell .important-footage-card dl > div {
+  min-width: 0;
+  padding: 5px 6px;
+  background: var(--surface-alt);
+  box-shadow: inset 1px 1px 0 var(--chrome-shadow), inset -1px -1px 0 var(--chrome-hi);
+}
+
+.computer-shell .important-footage-card dt {
+  color: var(--ui-muted);
+  font: 7px/1.2 "Courier New", monospace;
+  text-transform: uppercase;
+}
+
+.computer-shell .important-footage-card dd {
+  margin: 3px 0 0;
+  overflow: hidden;
+  color: var(--ui-text);
+  font: 700 9px/1.2 Tahoma, Arial, sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.computer-shell .important-footage-card > button {
+  color: #8e251f;
+  font-weight: 700;
+}
+
+.computer-shell .timeline-important-event {
+  flex-basis: 270px;
+  min-height: 148px;
+  border-left: 4px solid #bd3f32;
+  background:
+    repeating-linear-gradient(-45deg, transparent 0 9px, color-mix(in srgb, #bd3f32 6%, transparent) 9px 10px),
+    var(--surface);
+}
+
+.computer-shell .timeline-important-event > div:nth-child(2) > span {
+  color: #a42f28;
+}
+
+.computer-shell .timeline-important-summary {
+  display: block;
+  margin-top: 5px;
+  color: var(--ui-muted) !important;
+  font: 7px/1.35 Tahoma, Arial, sans-serif !important;
+}
+
+.computer-shell .timeline-important-event .timeline-controls {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.computer-shell .important-editor-backdrop {
+  z-index: 100;
+}
+
+.computer-shell .important-internal-editor {
+  width: min(1120px, 97vw);
+  height: min(840px, 95svh);
+  display: grid;
+  grid-template-rows: 29px minmax(0, 1fr) 52px;
+  padding: 3px;
+  overflow: hidden;
+  background: var(--chrome);
+  color: var(--ui-text);
+  box-shadow:
+    inset 2px 2px 0 var(--chrome-hi),
+    inset -2px -2px 0 var(--chrome-dark),
+    9px 10px 0 rgba(0, 0, 0, .4);
+}
+
+.computer-shell .important-internal-editor .important-event-titlebar > button {
+  width: 24px;
+  height: 23px;
+  margin-right: 2px;
+  border: 0;
+  background: var(--chrome);
+  color: var(--ui-text);
+  box-shadow: inset 1px 1px 0 var(--chrome-hi), inset -1px -1px 0 var(--chrome-dark);
+  cursor: pointer;
+  font: 700 16px/1 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-internal-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 10px;
+  background: var(--surface-alt);
+  box-shadow: inset 1px 1px 0 var(--chrome-shadow), inset -1px -1px 0 var(--chrome-hi);
+}
+
+.computer-shell .important-editor-story {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--document-rule);
+  border-left: 4px solid #bd3f32;
+  background: var(--surface);
+}
+
+.computer-shell .important-editor-story h2 {
+  margin: 7px 0 5px;
+  font: 700 22px/1.05 Tahoma, Arial, sans-serif;
+  letter-spacing: -.02em;
+}
+
+.computer-shell .important-editor-story p {
+  max-width: 730px;
+  margin: 0;
+  color: var(--ui-muted);
+  font: 10px/1.4 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-editor-story-cast {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.computer-shell .important-editor-story-cast > div {
+  width: 58px;
+  text-align: center;
+}
+
+.computer-shell .important-editor-story-cast .avatar-small {
+  width: 42px;
+  height: 46px;
+  margin: 0 auto 3px;
+  border: 1px solid var(--chrome-shadow);
+}
+
+.computer-shell .important-editor-story-cast span {
+  display: block;
+  overflow: hidden;
+  font: 7px Tahoma, Arial, sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.computer-shell .important-editor-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 9px;
+  margin-top: 9px;
+}
+
+.computer-shell .important-moment-editor,
+.computer-shell .important-editor-settings > section {
+  border: 1px solid var(--document-rule);
+  background: var(--surface);
+}
+
+.computer-shell .important-moment-editor {
+  padding: 10px;
+}
+
+.computer-shell .important-editor-settings {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.computer-shell .important-editor-settings > section {
+  padding: 9px;
+}
+
+.computer-shell .important-editor-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--document-rule);
+}
+
+.computer-shell .important-editor-section-heading small {
+  display: block;
+  color: #a42f28;
+  font: 700 7px "Courier New", monospace;
+  letter-spacing: .1em;
+}
+
+.computer-shell .important-editor-section-heading h3 {
+  margin: 1px 0 0;
+  font: 700 14px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-editor-section-heading > span {
+  padding: 3px 5px;
+  background: var(--surface-alt);
+  color: var(--ui-muted);
+  font: 7px "Courier New", monospace;
+}
+
+.computer-shell .important-editor-instruction {
+  margin: 7px 0;
+  color: var(--ui-muted);
+  font: 9px/1.35 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-edit-beat-list {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.computer-shell .important-edit-beat-list > li {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 88px;
+  gap: 8px;
+  align-items: center;
+  min-height: 82px;
+  padding: 7px;
+  border-left: 3px solid #bd3f32;
+  background: var(--surface-alt);
+  box-shadow: inset 1px 1px 0 var(--chrome-hi), inset -1px -1px 0 var(--chrome-shadow);
+}
+
+.computer-shell .important-edit-beat-list > li.is-excluded {
+  border-left-color: var(--chrome-shadow);
+  opacity: .66;
+}
+
+.computer-shell .important-edit-beat-index {
+  display: grid;
+  gap: 4px;
+  text-align: center;
+}
+
+.computer-shell .important-edit-beat-index b {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin: auto;
+  border: 1px solid var(--chrome-shadow);
+  background: var(--surface);
+  color: #a42f28;
+  font: 700 12px "Courier New", monospace;
+}
+
+.computer-shell .important-edit-beat-index small {
+  color: var(--ui-muted);
+  font: 6px "Courier New", monospace;
+}
+
+.computer-shell .important-edit-beat-copy > span {
+  display: inline-block;
+  padding: 2px 5px;
+  background: color-mix(in srgb, #bd3f32 14%, var(--surface));
+  color: #a42f28;
+  font: 700 7px "Courier New", monospace;
+  text-transform: uppercase;
+}
+
+.computer-shell .important-edit-beat-copy h4 {
+  margin: 4px 0 2px;
+  font: 700 12px/1.2 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-edit-beat-copy p {
+  margin: 0;
+  color: var(--ui-muted);
+  font: 9px/1.32 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-edit-beat-copy > small {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+  color: var(--ui-muted);
+  font: 7px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-edit-beat-copy > small i {
+  font-style: normal;
+}
+
+.computer-shell .important-edit-beat-actions {
+  display: grid;
+  gap: 5px;
+}
+
+.computer-shell .important-edit-beat-actions button,
+.computer-shell .important-internal-footer button {
+  min-height: 25px;
+  border: 0;
+  background: var(--chrome);
+  color: var(--ui-text);
+  box-shadow: inset 1px 1px 0 var(--chrome-hi), inset -1px -1px 0 var(--chrome-dark);
+  cursor: pointer;
+  font: 8px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-edit-beat-actions > button.is-active {
+  background: var(--selection-bg);
+  color: var(--selection-text);
+}
+
+.computer-shell .important-edit-beat-actions > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+}
+
+.computer-shell .important-edit-beat-actions button:disabled {
+  color: var(--chrome-shadow);
+  cursor: default;
+}
+
+.computer-shell .important-narrative-reading {
+  border-left: 4px solid #bd3f32 !important;
+}
+
+.computer-shell .narrative-reading-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.computer-shell .narrative-reading-grid > article {
+  min-width: 0;
+  padding: 7px;
+  border: 1px solid var(--document-rule);
+  background: var(--surface-alt);
+}
+
+.computer-shell .narrative-reading-grid > article > span,
+.computer-shell .narrative-reading-metrics dt {
+  display: block;
+  color: var(--ui-muted);
+  font: 7px "Courier New", monospace;
+  text-transform: uppercase;
+}
+
+.computer-shell .narrative-reading-grid > article > strong {
+  display: block;
+  margin-top: 5px;
+  color: #a42f28;
+  font: 700 12px/1.2 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .narrative-participant-value {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  margin-top: 4px;
+}
+
+.computer-shell .narrative-participant-value > div {
+  display: flex;
+  flex: 0 0 auto;
+  padding-left: 5px;
+}
+
+.computer-shell .narrative-participant-value .avatar-small {
+  width: 28px;
+  height: 31px;
+  margin-left: -5px;
+  border: 1px solid var(--surface);
+}
+
+.computer-shell .narrative-participant-value > b {
+  font: 700 9px/1.25 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .narrative-reading-grid .narrative-reading-wide {
+  grid-column: 1 / -1;
+}
+
+.computer-shell .narrative-reading-wide p {
+  margin: 5px 0 0;
+  color: var(--ui-text);
+  font: 9px/1.4 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .narrative-reading-summary {
+  border-left: 3px solid #bd3f32 !important;
+}
+
+.computer-shell .narrative-reading-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin: 7px 0 0;
+}
+
+.computer-shell .narrative-reading-metrics > div {
+  padding: 5px;
+  background: var(--surface-alt);
+}
+
+.computer-shell .narrative-reading-metrics dd {
+  margin: 3px 0 0;
+  font: 700 11px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-internal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 7px 6px 10px;
+}
+
+.computer-shell .important-internal-footer > div {
+  display: flex;
+  gap: 7px;
+}
+
+.computer-shell .important-internal-footer button {
+  min-width: 112px;
+  padding: 0 10px;
+}
+
+.computer-shell .important-internal-footer .button-primary {
+  min-width: 176px;
+}
+
+@media (max-width: 900px) {
+  .computer-shell .important-editor-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .computer-shell .important-editor-settings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .computer-shell .important-narrative-reading {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 620px) {
+  .computer-shell .important-footage-card {
+    grid-column: 1;
+  }
+
+  .computer-shell .important-footage-card dl,
+  .computer-shell .important-editor-settings {
+    grid-template-columns: 1fr;
+  }
+
+  .computer-shell .important-editor-story {
+    grid-template-columns: 1fr;
+  }
+
+  .computer-shell .important-editor-story-cast {
+    justify-content: flex-start;
+  }
+
+  .computer-shell .important-edit-beat-list > li {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  .computer-shell .important-edit-beat-actions {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr 84px;
+  }
+
+  .computer-shell .important-internal-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .computer-shell .important-internal-footer > div {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -4446,5 +4989,526 @@ select:focus-visible {
   .computer-shell .event-grid,
   .computer-shell .event-grid.event-grid-approach {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Important Event Chain: one feed story card and its chronological detail view. */
+
+.computer-shell .feed-entry.important-feed-card {
+  position: relative;
+  grid-template-columns: 58px minmax(0, 1fr) 26px;
+  min-height: 214px;
+  padding: 12px 10px 12px 14px;
+  border-left: 4px solid #bd3f32;
+  background:
+    repeating-linear-gradient(-45deg, transparent 0 9px, color-mix(in srgb, #bd3f32 7%, transparent) 9px 10px),
+    color-mix(in srgb, var(--surface) 91%, #f1c35a);
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-hi),
+    inset -1px -1px 0 var(--chrome-shadow);
+}
+
+.computer-shell .important-feed-card time {
+  color: #a42f28;
+}
+
+.computer-shell .important-feed-card-content {
+  position: relative;
+  grid-column: 2;
+  min-width: 0;
+  padding-right: 132px;
+}
+
+.computer-shell .important-event-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  padding: 3px 6px 3px 4px;
+  border: 1px solid #7f1f1c;
+  background: #bd3f32;
+  color: #fff;
+  font: 700 7px/1 Tahoma, Arial, sans-serif;
+  letter-spacing: .08em;
+}
+
+.computer-shell .important-event-badge > b {
+  display: grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  background: #fff;
+  color: #9b2923;
+  font: 700 10px/1 "Courier New", monospace;
+}
+
+.computer-shell .important-feed-card-content > small {
+  display: block;
+  margin-top: 7px;
+  color: var(--ui-muted);
+  font: 700 7px "Courier New", monospace;
+}
+
+.computer-shell .important-feed-card h3 {
+  margin: 5px 0 4px;
+  color: var(--ui-text);
+  font-size: 18px;
+}
+
+.computer-shell .important-feed-card p {
+  max-width: 650px;
+  color: var(--ui-text);
+  font-size: 10px;
+  line-height: 1.38;
+}
+
+.computer-shell .important-card-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 8px;
+  align-items: center;
+  margin-top: 9px;
+}
+
+.computer-shell .important-card-facts span {
+  color: var(--ui-muted);
+  font: 8px/1.25 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-card-facts span b {
+  color: var(--ui-text);
+}
+
+.computer-shell .important-card-portraits {
+  grid-row: 1 / span 3;
+  display: flex;
+  padding-left: 6px;
+}
+
+.computer-shell .important-card-portraits .avatar-small {
+  width: 34px;
+  height: 34px;
+  margin-left: -6px;
+  border: 2px solid var(--surface);
+  box-shadow: 1px 1px 0 var(--chrome-shadow);
+}
+
+.computer-shell .important-feed-card-content > button {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  min-width: 118px;
+  min-height: 31px;
+  padding: 5px 8px;
+  border: 0;
+  background: var(--chrome);
+  color: var(--ui-text);
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-hi),
+    inset -1px -1px 0 var(--chrome-dark),
+    inset 2px 2px 0 var(--chrome-mid),
+    inset -2px -2px 0 var(--chrome-shadow);
+  cursor: pointer;
+  font: 700 9px/1.1 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-feed-card-content > button:hover,
+.computer-shell .important-feed-card-content > button:focus-visible {
+  color: #9b2923;
+  outline: 1px dotted var(--ui-text);
+  outline-offset: -4px;
+}
+
+.computer-shell .important-event-backdrop {
+  z-index: 95;
+}
+
+.computer-shell .important-event-window {
+  width: min(900px, 96vw);
+  max-height: 92svh;
+  display: grid;
+  grid-template-rows: 29px minmax(0, 1fr) 36px;
+  padding: 3px;
+  overflow: hidden;
+  background: var(--chrome);
+  color: var(--ui-text);
+  box-shadow:
+    inset 2px 2px 0 var(--chrome-hi),
+    inset -2px -2px 0 var(--chrome-dark),
+    8px 9px 0 rgba(0, 0, 0, .38);
+}
+
+.computer-shell .important-event-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 6px;
+  background: linear-gradient(90deg, #7b1f1c, #c74a37);
+  color: #fff;
+}
+
+.computer-shell .important-event-titlebar > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.computer-shell .important-event-titlebar > div > span {
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  background: #fff;
+  color: #9b2923;
+  font: 700 12px "Courier New", monospace;
+}
+
+.computer-shell .important-event-titlebar b {
+  font: 700 11px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-event-titlebar > button,
+.computer-shell .important-event-window > footer button {
+  border: 0;
+  background: var(--chrome);
+  color: var(--ui-text);
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-hi),
+    inset -1px -1px 0 var(--chrome-dark);
+  cursor: pointer;
+}
+
+.computer-shell .important-event-titlebar > button {
+  width: 24px;
+  height: 23px;
+  margin-right: 2px;
+  font: 700 16px/1 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-event-detail {
+  min-height: 0;
+  overflow: auto;
+  padding: 14px;
+  background: var(--surface-alt);
+  box-shadow: inset 1px 1px 0 var(--chrome-shadow), inset -1px -1px 0 var(--chrome-hi);
+}
+
+.computer-shell .important-event-story-heading,
+.computer-shell .important-event-participants,
+.computer-shell .important-event-sequence {
+  border: 1px solid var(--document-rule);
+  background: var(--surface);
+}
+
+.computer-shell .important-event-story-heading {
+  padding: 16px 18px;
+  border-left: 4px solid #bd3f32;
+}
+
+.computer-shell .important-event-story-heading h2 {
+  margin: 8px 0 7px;
+  color: var(--ui-text);
+  font: 700 25px/1.05 Tahoma, Arial, sans-serif;
+  letter-spacing: -.03em;
+}
+
+.computer-shell .important-event-story-heading > p {
+  max-width: 760px;
+  margin: 0;
+  color: var(--ui-muted);
+  font: 11px/1.5 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-event-participants,
+.computer-shell .important-event-sequence {
+  margin-top: 10px;
+  padding: 12px;
+}
+
+.computer-shell .important-detail-section-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--document-rule);
+}
+
+.computer-shell .important-detail-section-title > span {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  background: var(--selection-bg);
+  color: var(--selection-text);
+  font: 700 10px "Courier New", monospace;
+}
+
+.computer-shell .important-detail-section-title small {
+  display: block;
+  color: #a42f28;
+  font: 700 7px "Courier New", monospace;
+  letter-spacing: .1em;
+}
+
+.computer-shell .important-detail-section-title h3 {
+  margin: 1px 0 0;
+  font: 700 16px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-participant-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.computer-shell .important-participant-list > div {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  background: var(--surface-alt);
+  box-shadow: inset 1px 1px 0 var(--chrome-shadow), inset -1px -1px 0 var(--chrome-hi);
+}
+
+.computer-shell .important-participant-list .avatar-medium {
+  width: 58px;
+  height: 67px;
+  border: 1px solid var(--chrome-shadow);
+}
+
+.computer-shell .important-participant-list b {
+  font: 700 11px/1.2 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-event-sequence ol {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.computer-shell .important-event-sequence li {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 9px;
+  padding: 8px;
+  border-left: 3px solid var(--document-rule);
+  background: var(--surface-alt);
+}
+
+.computer-shell .important-event-sequence li:nth-child(4) {
+  border-left-color: #bd3f32;
+}
+
+.computer-shell .important-beat-order {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--chrome-shadow);
+  background: var(--surface);
+  color: var(--ui-muted);
+  font: 700 11px "Courier New", monospace;
+}
+
+.computer-shell .important-beat-copy > span {
+  display: inline-block;
+  padding: 2px 5px;
+  background: color-mix(in srgb, #bd3f32 14%, var(--surface));
+  color: #a42f28;
+  font: 700 7px "Courier New", monospace;
+  text-transform: uppercase;
+}
+
+.computer-shell .important-beat-copy h4 {
+  margin: 4px 0 2px;
+  font: 700 12px/1.2 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-beat-copy p {
+  margin: 0;
+  color: var(--ui-muted);
+  font: 10px/1.35 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-beat-copy > small {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+  color: var(--ui-muted);
+  font: 8px/1.2 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-beat-copy > small i {
+  font-style: normal;
+}
+
+.computer-shell .important-event-window > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 3px 5px 3px 8px;
+  color: var(--ui-muted);
+  font: 8px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-event-window > footer button {
+  min-width: 72px;
+  height: 26px;
+  font: 9px Tahoma, Arial, sans-serif;
+}
+
+@media (max-width: 720px) {
+  .computer-shell .important-feed-card-content {
+    padding-right: 0;
+  }
+
+  .computer-shell .important-feed-card-content > button {
+    position: static;
+    width: 100%;
+    margin-top: 9px;
+  }
+
+  .computer-shell .important-event-window {
+    width: calc(100vw - 10px);
+    max-height: calc(100svh - 16px);
+  }
+
+  .computer-shell .important-event-detail {
+    padding: 8px;
+  }
+
+  .computer-shell .important-participant-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 430px) {
+  .computer-shell .feed-entry.important-feed-card {
+    grid-template-columns: 45px minmax(0, 1fr);
+  }
+
+  .computer-shell .important-event-story-heading {
+    padding: 12px;
+  }
+
+  .computer-shell .important-event-story-heading h2 {
+    font-size: 20px;
+  }
+
+  .computer-shell .important-event-sequence li {
+    grid-template-columns: 30px minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .computer-shell .important-beat-order {
+    width: 27px;
+    height: 27px;
+  }
+}
+
+.restart-game-button {
+  position: fixed;
+  z-index: 74;
+  top: 16px;
+  right: 126px;
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid var(--chrome-shadow, #4d4d4d);
+  box-shadow: inset 1px 1px 0 var(--chrome-highlight, #fff), 2px 2px 0 rgba(0, 0, 0, .18);
+  background: var(--surface, #d7d3c8);
+  color: var(--ink, #161616);
+  font: 700 10px/1 Tahoma, Arial, sans-serif;
+  letter-spacing: .04em;
+  cursor: pointer;
+}
+
+.restart-game-button:hover,
+.restart-game-button:focus-visible {
+  outline: 1px dotted currentColor;
+  outline-offset: -4px;
+}
+
+.restart-game-button:active {
+  box-shadow: inset 2px 2px 0 rgba(0, 0, 0, .25);
+  transform: translate(1px, 1px);
+}
+
+.restart-game-button span {
+  margin-right: 4px;
+  font-size: 14px;
+}
+
+.restart-confirm-backdrop {
+  position: fixed;
+  z-index: 120;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(4, 8, 14, .68);
+}
+
+.restart-confirm-dialog {
+  width: min(430px, 100%);
+  padding: 24px;
+  border: 2px solid var(--chrome-shadow, #4d4d4d);
+  box-shadow: inset 1px 1px 0 var(--chrome-highlight, #fff), 8px 8px 0 rgba(0, 0, 0, .28);
+  background: var(--surface, #e7e3d9);
+  color: var(--ink, #161616);
+  text-align: center;
+}
+
+.restart-confirm-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  margin: 0 auto 12px;
+  border: 2px solid #8d251f;
+  background: #c94437;
+  color: #fff;
+  font: 700 26px/1 "Courier New", monospace;
+}
+
+.restart-confirm-dialog h2 {
+  margin: 0 0 10px;
+  font: 700 22px/1.15 Georgia, serif;
+}
+
+.restart-confirm-dialog p {
+  margin: 0 auto 20px;
+  max-width: 340px;
+  color: var(--ui-muted, #4b4b4b);
+  font: 12px/1.5 Tahoma, Arial, sans-serif;
+}
+
+.restart-confirm-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.restart-confirm-actions .button {
+  min-height: 34px;
+}
+
+@media (max-width: 560px) {
+  .restart-game-button {
+    top: 56px;
+    right: 10px;
+  }
+
+  .restart-confirm-actions {
+    flex-direction: column-reverse;
+  }
+
+  .restart-confirm-actions .button {
+    width: 100%;
   }
 }
