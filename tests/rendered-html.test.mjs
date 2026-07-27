@@ -76,12 +76,11 @@ test("source contains the complete playable season loop", async () => {
   assert.match(page, /draggable/);
   assert.match(page, /Intervalo \$\{number\}/);
   assert.match(page, /Os personagens estao chegando na casa/);
-  assert.match(page, /Ao escolher um corte, voce pode escolher a abordagem/);
-  assert.match(page, /Todos os lados/);
-  assert.match(page, /Engraçado/);
-  assert.match(page, /Conflituoso/);
+  assert.match(page, /Banco de acontecimentos/);
+  assert.match(page, /LEITURA EDITORIAL/);
+  assert.match(page, /FECHAR CORTE E TRANSMITIR/);
   assert.match(page, /const FEED_REFRESH_MS = 3500/);
-  assert.match(page, /atualização automática ativa/);
+  assert.match(page, /Atualização automática ativa/);
   assert.doesNotMatch(page, /Maior potencial|>potencial</i);
   assert.match(page, /Quem deve sair\?/);
   assert.match(page, /Quem deve vencer\?/);
@@ -90,24 +89,146 @@ test("source contains the complete playable season loop", async () => {
   assert.match(css, /\.computer-shell \.feed-entry > div:not\(\.feed-line\)/);
   assert.match(css, /transparent 0 7px,\s*rgba\(0, 0, 0, \.07\) 8px,\s*transparent 9px/);
   assert.match(css, /transform:\s*scale\(1\.35\)/);
-  assert.match(page, /event-grid-approach/);
   assert.match(page, /data-category=\{event\.category\}/);
-  assert.match(page, /arraste ou clique para adicionar/);
+  assert.match(page, /\+ ADICIONAR/);
   assert.match(page, /ACONTECIMENTO IMPORTANTE/);
-  assert.match(page, /Abrir acontecimento/);
+  assert.match(page, /ABRIR ACONTECIMENTO/);
   assert.match(page, /Sequência do acontecimento/);
-  assert.match(page, /Momentos registrados:/);
+  assert.match(page, /weekOneImportantEventBeats\.length\} momentos/);
   assert.match(page, /openImportantBeats\.map/);
   assert.match(page, /Cause: "Causa"/);
   assert.match(page, /Confrontation: "Confronto"/);
   assert.match(page, /kind: "important"/);
   assert.match(page, /kind: "secondary"/);
-  assert.match(css, /\.computer-shell \.event-grid\.event-grid-approach/);
+  assert.match(css, /\.computer-shell \.editor-workspace/);
   assert.match(css, /border-left:\s*4px solid var\(--event-accent\)/);
   assert.match(css, /\.computer-shell \.feed-entry\.important-feed-card/);
   assert.match(css, /\.computer-shell \.important-event-window/);
   assert.doesNotMatch(css, /grid-template-columns:\s*58px 0 minmax\(0,\s*1fr\) 26px/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
+});
+
+test("the camera Feed exposes automatic sync, filters, selection and contextual details", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const feedSource = page.slice(page.indexOf("function renderFeed()"), page.indexOf("function renderChallenge()"));
+
+  assert.match(feedSource, /FEED DAS CÂMERAS/);
+  assert.match(feedSource, /SINAL AO VIVO/);
+  assert.match(feedSource, /Atualização automática ativa/);
+  assert.match(feedSource, /Feed sincronizado/);
+  assert.match(feedSource, /próximo registro em/);
+  assert.doesNotMatch(feedSource, /Atualizar feed/);
+  assert.match(feedSource, /4 de 8 câmeras/);
+  assert.match(feedSource, /\["all", "TODOS"/);
+  assert.match(feedSource, /\["important", "IMPORTANTES"/);
+  assert.match(feedSource, /\["unseen", "NÃO VISTOS"/);
+  assert.match(feedSource, /selectFeedItem/);
+  assert.match(feedSource, /aria-selected=\{isSelected\}/);
+  assert.match(feedSource, /LEITURA DO ACONTECIMENTO/);
+  assert.match(feedSource, /POR QUE MERECE ATENÇÃO/);
+  assert.match(feedSource, /selectedItem\.kind === "important"/);
+  assert.match(feedSource, /ABRIR ACONTECIMENTO/);
+  assert.doesNotMatch(feedSource, /CRONOLOGIA|ORDEM CRONOLÓGICA|Sequência do acontecimento/);
+  assert.match(feedSource, /Ir para edição do episódio/);
+  assert.doesNotMatch(feedSource, /Avançar 2 dias e editar episódio/);
+  assert.doesNotMatch(feedSource, /Registro secundário · sem micro-história editável/);
+  assert.match(css, /grid-template-columns:\s*minmax\(0, 64fr\) minmax\(260px, 36fr\)/);
+  assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.computer-shell \.feed-workspace \{\s*grid-template-columns: 1fr;/);
+  assert.match(css, /\.computer-shell \.feed-entry\.important-feed-card[\s\S]*?border-left:\s*5px solid #a6382e/);
+  assert.match(css, /\.computer-shell \.feed-entry:focus-visible/);
+});
+
+test("PLIN can be dismissed and reopens when its message changes", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+
+  assert.match(page, /dismissedGuideMessage/);
+  assert.match(page, /guideVisible = dismissedGuideMessage !== currentGuideMessage/);
+  assert.match(page, /aria-label="Fechar assistente"/);
+  assert.match(page, /setDismissedGuideMessage\(currentGuideMessage\)/);
+  assert.match(css, /\.computer-shell \.guide-close/);
+  assert.match(css, /\.computer-shell \.feed-entry \.feed-category,[\s\S]*?color:\s*#fff/);
+  assert.match(css, /\.computer-shell \.feed-footer > \.button[\s\S]*?margin-left:\s*12px/);
+  assert.match(css, /\.computer-shell \.app-feed \.window-content \{\s*overflow:\s*hidden/);
+  assert.match(css, /grid-template-rows:\s*auto auto minmax\(0, 1fr\) auto/);
+});
+
+test("Edição uses the approved timeline, bank and persistent cut-state workspace", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  const analysis = await readFile(new URL("../app/editor-analysis.ts", import.meta.url), "utf8");
+  const editorSource = page.slice(page.indexOf("function renderEditor()"), page.indexOf("function renderMail()"));
+
+  assert.match(analysis, /minMinutes:\s*38/);
+  assert.match(analysis, /maxMinutes:\s*46/);
+  assert.match(analysis, /commercialBreaks:\s*4/);
+  assert.match(analysis, /commercialBreakMinutes:\s*4/);
+  assert.match(analysis, /classifyDuration/);
+  assert.match(analysis, /classifyRhythm/);
+  assert.match(analysis, /classifyVariety/);
+  assert.match(analysis, /classifyFocus/);
+  assert.match(analysis, /firstEmptyProgramZoneIndex/);
+  assert.match(analysis, /item\.kind === "ad" \|\| item\.id !== id/);
+
+  assert.match(editorSource, /editor-workspace/);
+  assert.match(editorSource, /timeline-drop-zone/);
+  assert.match(editorSource, /timeline-ad-copy/);
+  assert.match(editorSource, /item\.kind !== "ad"/);
+  assert.match(editorSource, /heading-current-duration/);
+  assert.match(editorSource, /FAIXA IDEAL/);
+  assert.match(editorSource, /duration-range-scale/);
+  assert.match(editorSource, /duration-current-label/);
+  assert.match(editorSource, /Episódio longo: a duração acima da faixa pode cansar a audiência/);
+  assert.match(editorSource, /Episódio curto: a duração abaixo da faixa pode afetar a recepção do público/);
+  assert.match(editorSource, /important-card-footer/);
+  assert.match(editorSource, /event-bank-content/);
+  assert.match(editorSource, /<div className="event-grid">[\s\S]*?showImportantFootage[\s\S]*?important-footage-card/);
+  assert.doesNotMatch(editorSource, /important-footage-feature/);
+  assert.match(editorSource, /event-card-labels/);
+  assert.match(editorSource, /<span>\{event\.category\}<\/span>/);
+  assert.match(editorSource, /<b>BLOCO \{index \+ 1\}<\/b>/);
+  assert.match(editorSource, /event\.description/);
+  assert.match(editorSource, /event-card-participants/);
+  assert.match(editorSource, /required-badge/);
+  assert.match(editorSource, /OBRIGATÓRIOS/);
+  assert.match(editorSource, /locateRequiredEvent/);
+  assert.match(editorSource, /Ritmo/);
+  assert.match(editorSource, /Variedade/);
+  assert.match(editorSource, /Foco/);
+  assert.match(editorSource, /FECHAR CORTE E TRANSMITIR/);
+  assert.match(editorSource, /const transmissionBlocked = eventCount < 2 \|\| missingRequiredEvents\.length > 0/);
+  assert.match(editorSource, /disabled=\{transmissionBlocked\}/);
+  assert.match(editorSource, /Inclua pelo menos dois acontecimentos/);
+  assert.match(editorSource, /Inclua todos os cortes obrigatórios/);
+  assert.match(editorSource, /Pronto para transmitir/);
+  assert.match(editorSource, /!importantBlockInTimeline/);
+  assert.doesNotMatch(editorSource, /audiência prevista|AUDIÊNCIA|Parcialidade|Todos os lados|approach-tone/);
+  assert.match(page, /const liveAudience = Math\.round\(11 \+ \(predictedAudience - 11\)/);
+
+  assert.match(css, /grid-template-columns:\s*minmax\(0, 81fr\) minmax\(200px, 19fr\)/);
+  assert.match(css, /\.computer-shell \.timeline-track \.timeline-ad[\s\S]*?flex:\s*0 0 68px/);
+  assert.match(css, /\.timeline-ad-copy b[\s\S]*?font:\s*700 8px/);
+  assert.match(css, /\.timeline-ad-copy strong[\s\S]*?font:\s*700 15px/);
+  assert.match(css, /grid-auto-rows:\s*148px/);
+  assert.match(css, /\.computer-shell \.important-card-footer > button[\s\S]*?position:\s*static/);
+  assert.match(css, /Consolidated Edição layout[\s\S]*?grid-template-rows:\s*175px minmax\(0, 1fr\)/);
+  assert.equal((css.match(/Consolidated Edição layout/g) ?? []).length, 1);
+  assert.doesNotMatch(css, /Final desktop proportions|Final consistency pass|Mockup-alignment corrections/);
+  assert.match(css, /\.computer-shell \.timeline-drop-zone[\s\S]*?flex:\s*1 1 80px[\s\S]*?min-width:\s*72px/);
+  assert.match(css, /\.computer-shell \.has-editorial-items \.timeline-drop-zone[\s\S]*?flex:\s*0 0 34px/);
+  assert.doesNotMatch(css, /\.has-editorial-items \.timeline-drop-zone\s*\{[^}]*min-width:\s*12px/s);
+  assert.match(css, /grid-template-columns:\s*repeat\(auto-fill, minmax\(205px, 1fr\)\)/);
+  assert.match(css, /\.event-card-labels > span[\s\S]*?flex:\s*0 0 auto[\s\S]*?text-overflow:\s*clip[\s\S]*?white-space:\s*nowrap/);
+  assert.doesNotMatch(css, /\.important-footage-card\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/s);
+  assert.doesNotMatch(css, /\.important-footage-feature/);
+  assert.match(css, /\.editor-transmit-area \.button:disabled[\s\S]*?cursor:\s*not-allowed/);
+  assert.match(css, /\.computer-shell \.duration-current-label\.is-high[\s\S]*?translateX\(-100%\)/);
+  assert.match(css, /\.computer-shell \.app-edit \.window-content \{\s*overflow:\s*hidden/);
+  assert.match(css, /\.computer-shell \.event-bank \.event-grid[\s\S]*?overflow-y:\s*auto/);
+  assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.computer-shell \.editor-workspace[\s\S]*?flex-direction:\s*column/);
+  assert.match(css, /@media \(min-width: 901px\)[\s\S]*?\.computer-shell:has\(\.app-edit\) \.guide-bubble/);
+  assert.match(css, /\.computer-shell:has\(\.app-edit\) \.guide-bubble \{[\s\S]*?right:\s*8px;[\s\S]*?left:\s*auto/);
 });
 
 test("the player can restart from Week 1 and the development inspector stays hidden by default", async () => {
@@ -188,7 +309,7 @@ test("source contains the complete Important Event internal editing workflow", a
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
 
   assert.match(page, /important-footage-card/);
-  assert.match(page, /Editar acontecimento/);
+  assert.match(page, /importantCardEdit\.status === "not_edited" \? "EDITAR" : "REABRIR"/);
   assert.match(page, /Editor interno de acontecimento/);
   assert.match(page, /editingImportantBeats\.map/);
   assert.match(page, /toggleImportantBeat/);
@@ -207,7 +328,7 @@ test("source contains the complete Important Event internal editing workflow", a
   assert.match(page, /kind: "important-event"/);
   assert.match(page, /current\.some\(\(item\) => item\.id === timelineId\)/);
   assert.match(page, /current\.map\(\(item\) => item\.id === timelineId \? timelineItem : item\)/);
-  assert.match(page, /Momentos utilizados:/);
+  assert.match(page, /selectedBeatIds\.length\} MOMENTOS/);
   assert.match(models, /selectedBeatIds: string\[\]/);
   assert.match(models, /excludedBeatIds: string\[\]/);
   assert.match(models, /televisedOrder: string\[\]/);

@@ -17,6 +17,60 @@ import { selectFeedEvents } from "../game/selectors/feed";
 import { simulateSeasons } from "../game/simulator";
 import { createInitialState } from "../game/state";
 import type { ChallengeType, GameState } from "../game/types";
+import {
+  classifyDuration,
+  classifyFocus,
+  classifyRhythm,
+  classifyVariety,
+  firstEmptyProgramZoneIndex,
+  insertIntoFirstEmptyProgramZone,
+  moveTimelineItem,
+  removeEditorialTimelineItem,
+  validateEditorCut,
+} from "../app/editor-analysis";
+
+test("editor qualitative readings follow the approved boundaries", () => {
+  assert.equal(classifyDuration(37.99 * 60).label, "Curta");
+  assert.equal(classifyDuration(38 * 60).label, "Adequada");
+  assert.equal(classifyDuration(46 * 60).label, "Adequada");
+  assert.equal(classifyDuration(46.01 * 60).label, "Longa");
+
+  assert.equal(classifyRhythm([]).label, "Ainda sem leitura");
+  assert.equal(classifyRhythm([4, 5]).label, "Acelerado");
+  assert.equal(classifyRhythm([5, 7]).label, "Equilibrado");
+  assert.equal(classifyRhythm([8]).label, "Lento");
+
+  assert.equal(classifyVariety([]).label, "Ainda sem leitura");
+  assert.equal(classifyVariety(["Humor"]).label, "Baixa");
+  assert.equal(classifyVariety(["Humor", "Festa"]).label, "Moderada");
+  assert.equal(classifyVariety(["Humor", "Festa", "Prova"]).label, "Boa");
+
+  const name = (id: string) => ({ a: "Ana", b: "Beto" })[id as "a" | "b"] ?? id;
+  assert.equal(classifyFocus([], name).label, "Ainda sem leitura");
+  assert.equal(classifyFocus([["a"]], name).label, "Ainda sem leitura");
+  assert.equal(classifyFocus([["a"], ["a", "b"], ["b"]], name).label, "Concentrado em Ana");
+  assert.equal(classifyFocus([["a"], ["b"]], name).label, "Distribuído");
+});
+
+test("editor timeline keeps four movable, non-removable ads and fills program zones", () => {
+  const ads = [1, 2, 3, 4].map((number) => ({ id: `ad-${number}`, kind: "ad" }));
+  assert.equal(firstEmptyProgramZoneIndex(ads), 0);
+  const withFirst = insertIntoFirstEmptyProgramZone(ads, { id: "event-1", kind: "event" });
+  assert.deepEqual(withFirst.map((item) => item.id), ["event-1", "ad-1", "ad-2", "ad-3", "ad-4"]);
+  const withSecond = insertIntoFirstEmptyProgramZone(withFirst, { id: "event-2", kind: "event" });
+  assert.deepEqual(withSecond.map((item) => item.id), ["event-1", "ad-1", "event-2", "ad-2", "ad-3", "ad-4"]);
+  assert.equal(removeEditorialTimelineItem(withSecond, "ad-1").filter((item) => item.kind === "ad").length, 4);
+  assert.equal(removeEditorialTimelineItem(withSecond, "event-1").some((item) => item.id === "event-1"), false);
+  assert.deepEqual(moveTimelineItem(ads, 0, 1).map((item) => item.id), ["ad-2", "ad-1", "ad-3", "ad-4"]);
+});
+
+test("editor validation blocks only editorial count and missing required events", () => {
+  assert.match(validateEditorCut(1, []) ?? "", /pelo menos dois/);
+  assert.match(validateEditorCut(2, [{ id: "required", title: "Resultado da prova", included: false }]) ?? "", /Resultado da prova/);
+  assert.equal(validateEditorCut(2, [{ id: "required", title: "Resultado da prova", included: true }]), null);
+  assert.equal(classifyDuration(60 * 60).label, "Longa");
+  assert.equal(validateEditorCut(2, []), null, "duration outside the recommendation must not block transmission");
+});
 
 test("cast content is mechanically complete", () => {
   assert.deepEqual(validateCast(), []);

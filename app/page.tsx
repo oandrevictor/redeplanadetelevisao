@@ -19,6 +19,17 @@ import type {
 } from "@/game/types";
 import { GameInspector } from "./game-inspector";
 import { useGameEngine } from "./use-game-engine";
+import {
+  EDITOR_DURATION_CONFIG,
+  classifyDuration,
+  classifyFocus,
+  classifyRhythm,
+  classifyVariety,
+  insertIntoFirstEmptyProgramZone,
+  moveTimelineItem,
+  removeEditorialTimelineItem,
+  validateEditorCut,
+} from "./editor-analysis";
 
 type ChallengeType = DomainChallengeType;
 type PersonalityTrait = DomainPersonalityTrait;
@@ -32,6 +43,7 @@ import { analyzeImportantEventEdit, importantEventConstructionLabels } from "./i
 import { generateWeekEvents, WEEK_ONE_SEED } from "./important-event-generation";
 type AppView = "mail" | "feed" | "challenge" | "edit";
 type Theme = "light" | "dark";
+type FeedFilter = "all" | "important" | "unseen";
 type Phase =
   | "email"
   | "feedIntro"
@@ -456,15 +468,6 @@ const eventParticipantIds: Record<string, string[]> = {
   "discursos-final": allParticipantIds,
 };
 
-const toneOptions: Array<{ value: CutTone; label: string }> = [
-  { value: "neutro", label: "Neutro" },
-  { value: "engracado", label: "Engraçado" },
-  { value: "triste", label: "Triste" },
-  { value: "malicioso", label: "Malicioso" },
-  { value: "conflituoso", label: "Conflituoso" },
-  { value: "emocional", label: "Emocional" },
-];
-
 const adSlots: TimelineItem[] = [1, 2, 3, 4].map((number) => ({
   id: `intervalo-${number}`,
   kind: "ad" as const,
@@ -473,25 +476,25 @@ const adSlots: TimelineItem[] = [1, 2, 3, 4].map((number) => ({
 }));
 
 const inlineIntroFeed = [
-  { time: "08:14", camera: "CAM 01 · SALA", title: "Dandara foi a primeira a entrar", body: "Ela já escolheu o sofá e está narrando a própria chegada." },
-  { time: "08:26", camera: "CAM 04 · QUARTO", title: "Disputa silenciosa por camas", body: "Iago largou um tênis em cada cama. Celina anotou mentalmente." },
-  { time: "09:02", camera: "CAM 07 · COZINHA", title: "Primeiro café, primeira faísca", body: "Bento usou o último filtro. Jussara chamou de crime federal." },
-  { time: "09:41", camera: "CAM 03 · VARANDA", title: "Uma aliança começa a tomar forma", body: "Três participantes combinaram trocar informações antes da prova." },
+  { id: "intro-dandara", time: "08:14", camera: "CAM 01 · SALA", title: "Dandara foi a primeira a entrar", body: "Ela já escolheu o sofá e está narrando a própria chegada.", category: "Convivência", participantIds: ["dandara"] },
+  { id: "intro-camas", time: "08:26", camera: "CAM 04 · QUARTO", title: "Disputa silenciosa por camas", body: "Iago largou um tênis em cada cama. Celina anotou mentalmente.", category: "Convivência", participantIds: ["iago", "celina"] },
+  { id: "intro-cafe", time: "09:02", camera: "CAM 07 · COZINHA", title: "Primeiro café, primeira faísca", body: "Bento usou o último filtro. Jussara chamou de crime federal.", category: "Humor", participantIds: ["bento", "jussara"] },
+  { id: "intro-alianca", time: "09:41", camera: "CAM 03 · VARANDA", title: "Uma aliança começa a tomar forma", body: "Três participantes combinaram trocar informações antes da prova.", category: "Estratégia", participantIds: [] },
 ];
 
 const inlinePartyFeed = [
-  { time: "23:18", camera: "CAM 02 · PISTA", title: "Começou a Festa Sinal de Verão", body: "Luzes fluorescentes, pista molhada e figurinos que desafiam o sinal da TV." },
-  { time: "00:07", camera: "CAM 06 · BAR", title: "Uma aproximação inesperada", body: "Duas pessoas que quase não conversavam passaram vinte minutos juntas no bar." },
-  { time: "01:12", camera: "CAM 03 · VARANDA", title: "Comentário captado pelo microfone", body: "Uma crítica atravessou a festa e pode mudar os votos da casa." },
-  { time: "02:36", camera: "CAM 05 · QUARTO", title: "Jussara encerra a noite com coreografia", body: "Até quem estava brigado apareceu para aprender o passinho." },
+  { id: "party-abertura", time: "23:18", camera: "CAM 02 · PISTA", title: "Começou a Festa Sinal de Verão", body: "Luzes fluorescentes, pista molhada e figurinos que desafiam o sinal da TV.", category: "Festa", participantIds: [] },
+  { id: "party-aproximacao", time: "00:07", camera: "CAM 06 · BAR", title: "Uma aproximação inesperada", body: "Duas pessoas que quase não conversavam passaram vinte minutos juntas no bar.", category: "Relacionamento", participantIds: [] },
+  { id: "party-microfone", time: "01:12", camera: "CAM 03 · VARANDA", title: "Comentário captado pelo microfone", body: "Uma crítica atravessou a festa e pode mudar os votos da casa.", category: "Comentário", participantIds: [] },
+  { id: "party-coreografia", time: "02:36", camera: "CAM 05 · QUARTO", title: "Jussara encerra a noite com coreografia", body: "Até quem estava brigado apareceu para aprender o passinho.", category: "Festa", participantIds: ["jussara"] },
 ];
 
 const introFeed = process.env.NEXT_PUBLIC_LEGACY_CONTENT === "inline" ? inlineIntroFeed : extractedIntroFeed;
 const partyFeed = process.env.NEXT_PUBLIC_LEGACY_CONTENT === "inline" ? inlinePartyFeed : extractedPartyFeed;
 
 type FeedPresentationItem =
-  | { kind: "secondary"; time: string; camera: string; title: string; body: string }
-  | { kind: "important"; time: string; camera: string; chainId: string };
+  | { kind: "secondary"; id: string; time: string; camera: string; title: string; body: string; category: string; participantIds: string[] }
+  | { kind: "important"; id: string; time: string; camera: string; chainId: string };
 
 function withWeekOneImportantEvent(items: FeedPresentationItem[]): FeedPresentationItem[] {
   return weekOneImportantEventChain
@@ -499,6 +502,7 @@ function withWeekOneImportantEvent(items: FeedPresentationItem[]): FeedPresentat
       ...items.slice(0, 3),
       {
         kind: "important",
+        id: `important-${weekOneImportantEventChain.id}`,
         time: "02:04",
         camera: "ARQUIVO · 5 CÂMERAS",
         chainId: weekOneImportantEventChain.id,
@@ -529,6 +533,8 @@ function importantEventSummary(includeReaction: boolean) {
   const beats = includeReaction ? weekOneImportantEventBeats : weekOneImportantEventBeats.slice(0, 4);
   return beats.map((beat) => beat.description).join(" ");
 }
+
+const importantEventFeedSummary = "Um comentário sobre a prova se espalha pela casa, provoca desconforto e divide o grupo.";
 
 function importantEventPrimaryLocations() {
   const primaryLocations = [weekOneImportantEventBeats[0]?.location, weekOneImportantEventBeats[3]?.location]
@@ -751,6 +757,11 @@ export default function Home() {
   const [windowOpen, setWindowOpen] = useState(true);
   const [feedCount, setFeedCount] = useState(0);
   const [partyCount, setPartyCount] = useState(0);
+  const [feedFilter, setFeedFilter] = useState<FeedFilter>("all");
+  const [selectedFeedItemId, setSelectedFeedItemId] = useState<string | null>(null);
+  const [seenFeedItemIds, setSeenFeedItemIds] = useState<Set<string>>(() => new Set());
+  const [feedCountdownMs, setFeedCountdownMs] = useState(FEED_REFRESH_MS);
+  const [dismissedGuideMessage, setDismissedGuideMessage] = useState<string | null>(null);
   const [challengeType, setChallengeType] = useState<ChallengeType | null>(null);
   const [leaderId, setLeaderId] = useState<string | null>(null);
   const [activeIds, setActiveIds] = useState(() => participants.map((participant) => participant.id));
@@ -765,6 +776,7 @@ export default function Home() {
   const [sort, setSort] = useState("gravacao");
   const [editorError, setEditorError] = useState("");
   const [dragged, setDragged] = useState<{ source: "bank" | "timeline"; id: string } | null>(null);
+  const [highlightedEditorItemId, setHighlightedEditorItemId] = useState<string | null>(null);
   const [liveProgress, setLiveProgress] = useState(0);
   const [nominees, setNominees] = useState<string[]>([]);
   const [audiencePick, setAudiencePick] = useState<string | null>(null);
@@ -938,7 +950,7 @@ export default function Home() {
     [generatedFootage],
   );
 
-  const availableEvents = useMemo(() => {
+  const episodeBankEvents = useMemo(() => {
     const episodeKind =
       phase === "editPremiere" ? "premiere"
         : phase === "editChallenge" ? "challenge"
@@ -963,22 +975,48 @@ export default function Home() {
             : ["melhores-semana", "festa-neon", "prova-lider", "discursos-final", "confessionario"];
 
     const dynamicEpisode = phase === "editPremiere" || phase === "editChallenge" || phase === "editVote" || phase === "editElimination" || phase === "editFinal";
-    let events: RecordedEvent[] = dynamicEpisode && shadowGameState.mode === "dynamic" && dynamicEvents.length >= 2
+    const events: RecordedEvent[] = dynamicEpisode && shadowGameState.mode === "dynamic" && dynamicEvents.length >= 2
       ? dynamicEvents
       : secondaryEvents.filter((event) => ids.includes(event.id) && !selectedIds.has(event.id));
+    return events;
+  }, [phase, timeline, shadowGameState, week]);
+
+  const availableEvents = useMemo(() => {
+    let events = episodeBankEvents;
     if (category !== "Todos") events = events.filter((event) => event.category === category);
     if (search.trim()) {
       const query = search.toLocaleLowerCase("pt-BR");
       events = events.filter((event) => `${event.title} ${event.description}`.toLocaleLowerCase("pt-BR").includes(query));
     }
     return sort === "duracao" ? [...events].sort((a, b) => a.duration - b.duration) : events;
-  }, [phase, timeline, category, search, sort, shadowGameState, week]);
+  }, [episodeBankEvents, category, search, sort]);
 
   const timelineDurationSeconds = timeline.reduce(
     (sum, item) => sum + (item.kind === "important-event" ? item.edit.finalDurationSeconds : item.duration * 60),
     0,
   );
   const eventCount = timeline.filter((item) => item.kind === "event" || item.kind === "important-event").length;
+  const selectedEventIds = new Set(timeline.filter((item) => item.kind === "event").map((item) => item.id));
+  const requiredEventCatalog = [...timeline.filter((item): item is TimelineItem & { kind: "event" } => item.kind === "event"), ...episodeBankEvents]
+    .filter((event) => event.requiredAnchor)
+    .filter((event, index, events) => events.findIndex((candidate) => candidate.id === event.id) === index)
+    .map((event) => ({ id: event.id, title: event.title, included: selectedEventIds.has(event.id) }));
+  const missingRequiredEvents = requiredEventCatalog.filter((event) => !event.included);
+  const durationReading = classifyDuration(timelineDurationSeconds);
+  const rhythmReading = classifyRhythm(timeline
+    .filter((item) => item.kind !== "ad")
+    .map((item) => item.kind === "important-event" ? item.edit.finalDurationSeconds / 60 : item.duration));
+  const varietyReading = classifyVariety(timeline
+    .filter((item): item is TimelineItem & { kind: "event" } => item.kind === "event")
+    .map((item) => item.category));
+  const focusReading = classifyFocus(timeline
+    .filter((item) => item.kind !== "ad")
+    .map((item) => item.kind === "event"
+      ? participantIdsForEditorEvent(item)
+      : [...new Set(weekOneImportantEventBeats
+        .filter((beat) => item.edit.selectedBeatIds.includes(beat.id))
+        .flatMap((beat) => beat.participantIds))]),
+  (id) => participants.find((participant) => participant.id === id)?.name.split(" ")[0] ?? id);
   const plannedCuts = useMemo(() => {
     const knownEventIds = new Set(shadowGameState.house.eventHistory.map((event) => event.id));
     return timeline
@@ -1038,68 +1076,13 @@ export default function Home() {
     return activeInvolvedIds.length > 0 ? activeInvolvedIds : activeIds;
   }
 
-  function approachFrom(event: RecordedEvent, approaches: Record<string, CutApproach>): CutApproach {
-    const involvedIds = involvedIdsFor(event);
-    const saved = approaches[event.id];
-    if (!saved) return { perspectiveIds: involvedIds, tone: "neutro" };
-    const availablePerspectiveIds = saved.perspectiveIds.filter((id) => involvedIds.includes(id));
-    return {
-      perspectiveIds: availablePerspectiveIds.length > 0 ? availablePerspectiveIds : involvedIds,
-      tone: saved.tone,
-    };
+  function participantIdsForEditorEvent(event: RecordedEvent) {
+    const configuredIds = event.actorIds?.length ? event.actorIds : eventParticipantIds[event.id] ?? [];
+    return configuredIds.filter((id) => activeIds.includes(id));
   }
 
-  function approachFor(event: RecordedEvent) {
-    return approachFrom(event, eventApproaches);
-  }
-
-  function chooseAllPerspectives(event: RecordedEvent) {
-    setEventApproaches((current) => {
-      const approach = approachFrom(event, current);
-      return {
-        ...current,
-        [event.id]: { ...approach, perspectiveIds: involvedIdsFor(event) },
-      };
-    });
-  }
-
-  function togglePerspective(event: RecordedEvent, participantId: string) {
-    setEventApproaches((current) => {
-      const involvedIds = involvedIdsFor(event);
-      const approach = approachFrom(event, current);
-      const allSelected = approach.perspectiveIds.length === involvedIds.length;
-      const perspectiveIds = allSelected
-        ? [participantId]
-        : approach.perspectiveIds.includes(participantId)
-          ? approach.perspectiveIds.length === 1
-            ? approach.perspectiveIds
-            : approach.perspectiveIds.filter((id) => id !== participantId)
-          : [...approach.perspectiveIds, participantId];
-      return {
-        ...current,
-        [event.id]: { ...approach, perspectiveIds },
-      };
-    });
-  }
-
-  function chooseTone(event: RecordedEvent, tone: CutTone) {
-    setEventApproaches((current) => ({
-      ...current,
-      [event.id]: { ...approachFrom(event, current), tone },
-    }));
-  }
-
-  function approachSummary(item: TimelineItem & { kind: "event" }) {
-    const involvedIds = involvedIdsFor(item);
-    const allSelected = item.approach.perspectiveIds.length === involvedIds.length;
-    const perspectiveLabel = allSelected
-      ? "todos os lados"
-      : item.approach.perspectiveIds
-        .map((id) => participants.find((participant) => participant.id === id)?.name.split(" ")[0])
-        .filter(Boolean)
-        .join(" + ");
-    const toneLabel = toneOptions.find((option) => option.value === item.approach.tone)?.label ?? "Neutro";
-    return `${perspectiveLabel} · ${toneLabel}`;
+  function neutralApproachFor(event: RecordedEvent): CutApproach {
+    return { perspectiveIds: involvedIdsFor(event), tone: "neutro" };
   }
 
   function openImportantEventEditor(chainId: string) {
@@ -1189,29 +1172,28 @@ export default function Home() {
     setImportantEventEdits((current) => ({ ...current, [editingImportantChain.id]: readyEdit }));
     setTimeline((current) => current.some((item) => item.id === timelineId)
       ? current.map((item) => item.id === timelineId ? timelineItem : item)
-      : [...current, timelineItem]);
+      : insertIntoFirstEmptyProgramZone(current, timelineItem));
+    setHighlightedEditorItemId(timelineId);
     setEditingImportantChainId(null);
     setImportantEditError("");
     setEditorError("");
   }
 
   function addEvent(event: RecordedEvent) {
-    setTimeline((current) => [...current, { ...event, kind: "event", approach: approachFor(event) }]);
+    const item: TimelineItem = { ...event, kind: "event", approach: neutralApproachFor(event) };
+    setTimeline((current) => insertIntoFirstEmptyProgramZone(current, item));
+    setHighlightedEditorItemId(event.id);
     setEditorError("");
   }
 
   function removeEvent(id: string) {
-    setTimeline((current) => current.filter((item) => item.kind === "ad" || item.id !== id));
+    setTimeline((current) => removeEditorialTimelineItem(current, id));
+    setHighlightedEditorItemId(null);
+    setEditorError("");
   }
 
   function moveItem(index: number, direction: -1 | 1) {
-    setTimeline((current) => {
-      const nextIndex = index + direction;
-      if (nextIndex < 0 || nextIndex >= current.length) return current;
-      const next = [...current];
-      [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
-      return next;
-    });
+    setTimeline((current) => moveTimelineItem(current, index, direction));
   }
 
   function dropOnTimeline(targetIndex?: number) {
@@ -1221,18 +1203,20 @@ export default function Home() {
       if (!event || timeline.some((item) => item.id === event.id)) return;
       setTimeline((current) => {
         const next = [...current];
-        const item: TimelineItem = { ...event, kind: "event", approach: approachFor(event) };
+        const item: TimelineItem = { ...event, kind: "event", approach: neutralApproachFor(event) };
         if (typeof targetIndex === "number") next.splice(targetIndex, 0, item);
-        else next.push(item);
+        else return insertIntoFirstEmptyProgramZone(next, item);
         return next;
       });
+      setHighlightedEditorItemId(event.id);
     } else {
       setTimeline((current) => {
         const sourceIndex = current.findIndex((item) => item.id === dragged.id);
         if (sourceIndex < 0) return current;
         const next = [...current];
         const [item] = next.splice(sourceIndex, 1);
-        const destination = typeof targetIndex === "number" ? targetIndex : next.length;
+        const rawDestination = typeof targetIndex === "number" ? targetIndex : next.length;
+        const destination = sourceIndex < rawDestination ? rawDestination - 1 : rawDestination;
         next.splice(destination, 0, item);
         return next;
       });
@@ -1242,8 +1226,9 @@ export default function Home() {
   }
 
   function confirmEdit() {
-    if (eventCount < 2) {
-      setEditorError("Inclua pelo menos dois acontecimentos antes de fechar o corte.");
+    const validationError = validateEditorCut(eventCount, requiredEventCatalog);
+    if (validationError) {
+      setEditorError(validationError);
       return;
     }
     if (plannedCuts.length > 0) dispatchGame({ type: "BROADCAST_EPISODE", cuts: plannedCuts });
@@ -1254,6 +1239,18 @@ export default function Home() {
     if (phase === "editElimination") setPhase("liveElimination");
     if (phase === "editFinal") setPhase("liveFinal");
     setWindowOpen(false);
+  }
+
+  function locateRequiredEvent(id: string) {
+    setSearch("");
+    setCategory("Todos");
+    setSort("gravacao");
+    setHighlightedEditorItemId(id);
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      const card = document.getElementById(`editor-bank-${id}`);
+      card?.scrollIntoView({ behavior: "smooth", block: "center" });
+      card?.focus({ preventScroll: true });
+    }));
   }
 
   function buildNominees() {
@@ -1335,6 +1332,12 @@ export default function Home() {
     const currentCount = partyPhase ? partyCount : feedCount;
     if (currentCount >= itemCount) return;
 
+    const deadline = Date.now() + FEED_REFRESH_MS;
+    const updateCountdown = () => {
+      setFeedCountdownMs(Math.max(0, deadline - Date.now()));
+    };
+    const countdownFrame = window.requestAnimationFrame(updateCountdown);
+    const countdown = window.setInterval(updateCountdown, 200);
     const timeout = window.setTimeout(() => {
       if (partyPhase) {
         setPartyCount((current) => Math.min(itemCount, current + 1));
@@ -1342,7 +1345,11 @@ export default function Home() {
         setFeedCount((current) => Math.min(itemCount, current + 1));
       }
     }, FEED_REFRESH_MS);
-    return () => window.clearTimeout(timeout);
+    return () => {
+      window.cancelAnimationFrame(countdownFrame);
+      window.clearInterval(countdown);
+      window.clearTimeout(timeout);
+    };
   }, [
     dynamicIntroFeed.length,
     dynamicPartyFeed.length,
@@ -1392,8 +1399,14 @@ export default function Home() {
   }
 
   function guideMessage() {
-    if (week >= 2 && isEditPhase) {
-      return "Ao escolher um corte, voce pode escolher a abordagem com que isso sera exibido para o publico: ajustando a parcialidade e o tom";
+    if (isEditPhase) {
+      if (missingRequiredEvents.length > 0) {
+        return `Ainda falta incluir ${missingRequiredEvents.length === 1 ? "o obrigatório" : "os obrigatórios"}: ${missingRequiredEvents.map((event) => event.title).join(", ")}.`;
+      }
+      if (durationReading.label === "Curta") return "O corte ainda está curto. Inclua mais acontecimentos se quiser chegar à faixa recomendada.";
+      if (durationReading.label === "Longa") return "O corte está longo. Você pode enxugar acontecimentos, mas isso não impede a transmissão.";
+      if (focusReading.label.startsWith("Concentrado")) return `${focusReading.label}. Vale conferir se esse é o foco editorial desejado.`;
+      return "O corte está dentro da faixa recomendada e sem pendências obrigatórias.";
     }
     if (phase === "email" || phase === "feedIntro" && feedCount < introFeed.length) {
       return "Os personagens estao chegando na casa, abra o feed das cameras para dar uma olhada no que está acontecendo";
@@ -1427,84 +1440,245 @@ export default function Home() {
     const secondaryItems: FeedPresentationItem[] = sourceItems.map((item) => ({ kind: "secondary", ...item }));
     const items = isParty && week === 1 ? withWeekOneImportantEvent(secondaryItems) : secondaryItems;
     const count = isParty ? partyCount : feedCount;
-    const setCount = isParty ? setPartyCount : setFeedCount;
+    const receivedItems = items.slice(0, Math.min(count, items.length));
+    const importantCount = receivedItems.filter((item) => item.kind === "important").length;
+    const unseenCount = receivedItems.filter((item) => !seenFeedItemIds.has(item.id)).length;
+    const filteredItems = receivedItems.filter((item) => {
+      if (feedFilter === "important") return item.kind === "important";
+      if (feedFilter === "unseen") return !seenFeedItemIds.has(item.id);
+      return true;
+    });
+    const selectedItem = receivedItems.find((item) => item.id === selectedFeedItemId)
+      ?? receivedItems.find((item) => item.kind === "important")
+      ?? receivedItems[0]
+      ?? null;
+    const selectedImportantChain = selectedItem?.kind === "important"
+      ? weekOneEventGeneration.importantEventChains.find((chain) => chain.id === selectedItem.chainId) ?? null
+      : null;
+    const selectedParticipants = selectedItem?.kind === "secondary"
+      ? selectedItem.participantIds
+        .map((id) => participants.find((participant) => participant.id === id))
+        .filter((participant): participant is Participant => Boolean(participant))
+      : selectedImportantChain?.participantIds
+        .map((id) => participants.find((participant) => participant.id === id))
+        .filter((participant): participant is Participant => Boolean(participant)) ?? [];
+    const isSynced = count >= items.length;
+    const nextRefreshSeconds = Math.max(1, Math.ceil(feedCountdownMs / 1000));
+
+    function selectFeedItem(itemId: string) {
+      setSelectedFeedItemId(itemId);
+      setSeenFeedItemIds((current) => {
+        if (current.has(itemId)) return current;
+        const next = new Set(current);
+        next.add(itemId);
+        return next;
+      });
+    }
+
     return (
       <div className="feed-panel">
-        <div className="feed-toolbar">
-          <div>
-            <span className="eyebrow">SINAL INTERNO · 8 CÂMERAS</span>
-            <h2>{isParty ? "Madrugada pós-festa" : "Chegada dos participantes"}</h2>
+        <header className="feed-toolbar">
+          <div className="feed-heading">
+            <h2>FEED DAS CÂMERAS</h2>
+            <span>{isParty ? "Madrugada pós-festa" : "Chegada dos participantes"}</span>
           </div>
-          <div className="live-chip"><i /> AO VIVO</div>
-        </div>
-        <div className="camera-strip" aria-label="Miniaturas das câmeras">
-          {["SALA", "QUARTO", "VARANDA", "COZINHA"].map((camera, index) => (
-            <div className={`camera-thumb camera-${index + 1}`} key={camera}>
-              <span>CAM {String(index + 1).padStart(2, "0")}</span>
-              <b>{camera}</b>
-              <div className="camera-silhouette" />
+          <div className="live-chip"><i /> SINAL AO VIVO</div>
+          <div className={`feed-header-status${isSynced ? " is-synced" : " is-active"}`} role="status">
+            <b>{isSynced ? "Feed sincronizado" : "Atualização automática ativa"}</b>
+            {!isSynced && <span>próximo registro em 00:{String(nextRefreshSeconds).padStart(2, "0")}</span>}
+          </div>
+          {isParty && <div className="feed-deadline">CORTE FECHA EM 2 DIAS</div>}
+        </header>
+
+        <section className="camera-band" aria-labelledby="camera-band-title">
+          <h3 className="sr-only" id="camera-band-title">Câmeras em destaque</h3>
+          <div className="camera-strip">
+            {["SALA", "QUARTO", "VARANDA", "COZINHA"].map((camera, index) => (
+              <div className={`camera-thumb camera-${index + 1}`} key={camera}>
+                <span>CAM {String(index + 1).padStart(2, "0")}</span>
+                <b>{camera}</b>
+                <div className="camera-silhouette" />
+              </div>
+            ))}
+          </div>
+          <p><b>4 de 8 câmeras</b><span>em destaque</span></p>
+        </section>
+
+        <div className="feed-workspace">
+          <section className="feed-list-panel" aria-labelledby="feed-list-title">
+            <h3 className="sr-only" id="feed-list-title">Registros recebidos</h3>
+            <div className="feed-filters" aria-label="Filtrar registros" role="group">
+              {([
+                ["all", "TODOS", receivedItems.length],
+                ["important", "IMPORTANTES", importantCount],
+                ["unseen", "NÃO VISTOS", unseenCount],
+              ] as const).map(([value, label, filterCount]) => (
+                <button
+                  aria-pressed={feedFilter === value}
+                  className={feedFilter === value ? "is-active" : ""}
+                  key={value}
+                  onClick={() => setFeedFilter(value)}
+                  type="button"
+                >
+                  {label} <b>{String(filterCount).padStart(2, "0")}</b>
+                </button>
+              ))}
             </div>
-          ))}
-        </div>
-        <div className="feed-log" aria-live="polite">
-          {items.slice(0, count).map((item, index) => {
-            if (item.kind === "important") {
-              const chain = weekOneEventGeneration.importantEventChains.find((candidate) => candidate.id === item.chainId);
-              if (!chain) return null;
-              const chainParticipants = chain.participantIds
-                .map((id) => participants.find((participant) => participant.id === id))
-                .filter((participant): participant is Participant => Boolean(participant));
-              return (
-                <article className="feed-entry important-feed-card" key={item.chainId}>
-                  <time>{item.time}</time>
-                  <div className="important-feed-card-content">
-                    <span className="important-event-badge"><b aria-hidden="true">!</b> ACONTECIMENTO IMPORTANTE</span>
-                    <small>{item.camera}</small>
-                    <h3>{chain.title}</h3>
-                    <p>{importantEventSummary(false)}</p>
-                    <div className="important-card-facts">
-                      <div className="important-card-portraits" aria-label={`Participantes: ${participantNames(chain.participantIds)}`}>
+            <div className="feed-log" aria-live="polite" aria-label="Feed de registros" role="listbox">
+              {filteredItems.map((item) => {
+                const isSelected = selectedFeedItemId === item.id;
+                const isNew = !seenFeedItemIds.has(item.id);
+                const entryNumber = receivedItems.findIndex((candidate) => candidate.id === item.id) + 1;
+                if (item.kind === "important") {
+                  const chain = weekOneEventGeneration.importantEventChains.find((candidate) => candidate.id === item.chainId);
+                  if (!chain) return null;
+                  const chainParticipants = chain.participantIds
+                    .map((id) => participants.find((participant) => participant.id === id))
+                    .filter((participant): participant is Participant => Boolean(participant));
+                  return (
+                    <article
+                      aria-label={`Acontecimento importante: ${chain.title}`}
+                      aria-selected={isSelected}
+                      className={`feed-entry important-feed-card${isSelected ? " is-selected" : ""}${isNew ? " is-new" : ""}`}
+                      key={item.id}
+                      onClick={() => selectFeedItem(item.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          selectFeedItem(item.id);
+                        }
+                      }}
+                      role="option"
+                      tabIndex={0}
+                    >
+                      <div className="feed-entry-meta"><time>{item.time}</time><span>{item.camera}</span></div>
+                      <div className="feed-entry-portraits" aria-label={`Participantes: ${participantNames(chain.participantIds)}`}>
                         {chainParticipants.map((participant) => <Avatar key={participant.id} participant={participant} size="small" />)}
                       </div>
-                      <span><b>Participantes:</b> {participantNames(chain.participantIds)}</span>
-                      <span><b>Locais principais:</b> {importantEventPrimaryLocations()}</span>
-                      <span><b>Momentos registrados:</b> {weekOneImportantEventBeats.length}</span>
-                    </div>
-                    <button onClick={() => setOpenImportantChainId(chain.id)} type="button">Abrir acontecimento</button>
-                  </div>
-                  <strong>{String(index + 1).padStart(2, "0")}</strong>
-                </article>
-              );
-            }
+                      <div className="important-feed-card-content">
+                        <span className="important-event-badge"><b aria-hidden="true">!</b> ACONTECIMENTO IMPORTANTE</span>
+                        <h3>{chain.title}</h3>
+                        <p>{importantEventFeedSummary}</p>
+                        <div className="important-card-facts">
+                          <span>{chain.participantIds.length} participantes</span>
+                          <span>{weekOneImportantEventBeats.length} momentos</span>
+                          <span>{importantEventPrimaryLocations().split(" e ").length} locais</span>
+                        </div>
+                      </div>
+                      {isNew && <span className="new-feed-badge">NOVO</span>}
+                      <strong>{String(entryNumber).padStart(2, "0")}</strong>
+                    </article>
+                  );
+                }
 
-            return (
-              <article className="feed-entry" key={`${item.time}-${item.title}`}>
-                <time>{item.time}</time>
-                <div className="feed-line" />
-                <div>
-                  <span>{item.camera}</span>
-                  <h3>{item.title}</h3>
-                  <p>{item.body}</p>
+                const itemParticipants = item.participantIds
+                  .map((id) => participants.find((participant) => participant.id === id))
+                  .filter((participant): participant is Participant => Boolean(participant));
+                return (
+                  <article
+                    aria-selected={isSelected}
+                    className={`feed-entry${isSelected ? " is-selected" : ""}${isNew ? " is-new" : ""}`}
+                    data-category={item.category}
+                    key={item.id}
+                    onClick={() => selectFeedItem(item.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        selectFeedItem(item.id);
+                      }
+                    }}
+                    role="option"
+                    tabIndex={0}
+                  >
+                    <div className="feed-entry-meta"><time>{item.time}</time><span>{item.camera}</span></div>
+                    {itemParticipants.length > 0 && (
+                      <div className="feed-entry-portraits" aria-label={`Participantes: ${participantNames(item.participantIds)}`}>
+                        {itemParticipants.map((participant) => <Avatar key={participant.id} participant={participant} size="small" />)}
+                      </div>
+                    )}
+                    <div className="feed-entry-copy">
+                      <span className="feed-category">{item.category}</span>
+                      <h3>{item.title}</h3>
+                      <p>{item.body}</p>
+                    </div>
+                    {isNew && <span className="new-feed-badge">NOVO</span>}
+                    <strong>{String(entryNumber).padStart(2, "0")}</strong>
+                  </article>
+                );
+              })}
+              {receivedItems.length === 0 && (
+                <div className="feed-empty">
+                  <div className="signal-loader" aria-hidden="true"><i /><i /><i /></div>
+                  <p>Aguardando acontecimentos…</p>
                 </div>
-                <strong>{String(index + 1).padStart(2, "0")}</strong>
-              </article>
-            );
-          })}
-          {count === 0 && (
-            <div className="feed-empty">
-              <div className="signal-loader" aria-hidden="true"><i /><i /><i /></div>
-              <p>Aguardando acontecimentos…</p>
+              )}
+              {receivedItems.length > 0 && filteredItems.length === 0 && (
+                <div className="feed-filter-empty">Nenhum registro neste filtro.</div>
+              )}
             </div>
-          )}
+          </section>
+
+          <aside className="feed-context-panel" aria-live="polite">
+            <header>LEITURA DO ACONTECIMENTO</header>
+            {!selectedItem ? (
+              <div className="feed-context-empty">
+                <b>Nenhum registro recebido</b>
+                <p>Os detalhes aparecerão aqui assim que a central captar o primeiro acontecimento.</p>
+              </div>
+            ) : selectedItem.kind === "important" && selectedImportantChain ? (
+              <div className="feed-context-content important-context">
+                <span className="important-event-badge"><b aria-hidden="true">!</b> ACONTECIMENTO IMPORTANTE</span>
+                <h3>{selectedImportantChain.title}</h3>
+                <div className="context-participants" aria-label={`Participantes: ${participantNames(selectedImportantChain.participantIds)}`}>
+                  {selectedParticipants.map((participant) => (
+                    <div key={participant.id}>
+                      <Avatar participant={participant} size="small" />
+                      <b>{participant.name.split(" ")[0]}</b>
+                    </div>
+                  ))}
+                </div>
+                <p>{importantEventFeedSummary}</p>
+                <div className="context-facts">
+                  <span>{selectedImportantChain.participantIds.length} participantes</span>
+                  <span>{weekOneImportantEventBeats.length} momentos</span>
+                  <span>{importantEventPrimaryLocations().split(" e ").length} locais</span>
+                </div>
+                <section className="context-attention">
+                  <h4>POR QUE MERECE ATENÇÃO</h4>
+                  <p>Pode mudar alianças e influenciar a votação da casa.</p>
+                </section>
+                <button className="button button-primary context-primary-action" onClick={() => setOpenImportantChainId(selectedImportantChain.id)} type="button">
+                  ABRIR ACONTECIMENTO <span aria-hidden="true">▶</span>
+                </button>
+              </div>
+            ) : selectedItem.kind === "secondary" ? (
+              <div className="feed-context-content secondary-context">
+                <span className="feed-category">{selectedItem.category}</span>
+                <h3>{selectedItem.title}</h3>
+                <small>{selectedItem.time} · {selectedItem.camera}</small>
+                {selectedParticipants.length > 0 && (
+                  <div className="context-participants" aria-label={`Participantes: ${participantNames(selectedItem.participantIds)}`}>
+                    {selectedParticipants.map((participant) => (
+                      <div key={participant.id}>
+                        <Avatar participant={participant} size="small" />
+                        <b>{participant.name.split(" ")[0]}</b>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p>{selectedItem.body}</p>
+              </div>
+            ) : null}
+          </aside>
         </div>
-        <div className="panel-actions">
-          {count < items.length ? (
-            <button className="button button-primary" onClick={() => setCount((current) => current + 1)} type="button">
-              Atualizar feed <span>+1 evento</span>
-            </button>
-          ) : isParty ? (
+
+        <footer className="feed-footer">
+          <span className={`status-note feed-auto-status${isSynced ? " is-synced" : " is-active"}`}>
+            {count}/{items.length} registros recebidos · {isSynced ? "Feed sincronizado" : "Atualização automática ativa"}
+          </span>
+          {isSynced && (isParty ? (
             <button className="button button-primary" onClick={() => startEdit("editVote")} type="button">
-              Avançar 2 dias e editar episódio
+              Ir para edição do episódio
             </button>
           ) : (
             <button
@@ -1517,11 +1691,9 @@ export default function Home() {
             >
               Definir primeira prova do líder
             </button>
-          )}
-          <span className={`status-note feed-auto-status${count < items.length ? " is-active" : ""}`}>
-            {count}/{items.length} registros recebidos · {count < items.length ? "atualização automática ativa" : "feed sincronizado"}
-          </span>
-        </div>
+          ))}
+          {!isSynced && <span className="feed-next-action-reason">A próxima etapa será liberada quando o Feed estiver sincronizado.</span>}
+        </footer>
       </div>
     );
   }
@@ -1585,60 +1757,6 @@ export default function Home() {
     );
   }
 
-  function renderApproachControls(event: RecordedEvent) {
-    if (week < 2) return null;
-    const involvedIds = involvedIdsFor(event);
-    const approach = approachFor(event);
-    const allSelected = approach.perspectiveIds.length === involvedIds.length;
-
-    return (
-      <fieldset
-        className="approach-editor"
-        onDragStart={(dragEvent) => dragEvent.stopPropagation()}
-        onPointerDown={(pointerEvent) => pointerEvent.stopPropagation()}
-      >
-        <legend>Abordagem</legend>
-        <div className="approach-row">
-          <span>Parcialidade</span>
-          {involvedIds.length === 1 ? (
-            <small className="approach-single">
-              Perspectiva única · {participants.find((participant) => participant.id === involvedIds[0])?.name.split(" ")[0]}
-            </small>
-          ) : (
-            <div className="approach-options" role="group" aria-label={`Perspectivas de ${event.title}`}>
-              <button aria-pressed={allSelected} onClick={() => chooseAllPerspectives(event)} type="button">
-                Todos os lados
-              </button>
-              {involvedIds.map((id) => {
-                const participant = participants.find((item) => item.id === id);
-                if (!participant) return null;
-                return (
-                  <button
-                    aria-label={`Incluir perspectiva de ${participant.name}`}
-                    aria-pressed={approach.perspectiveIds.includes(id) && !allSelected}
-                    key={id}
-                    onClick={() => togglePerspective(event, id)}
-                    type="button"
-                  >
-                    {participant.name.split(" ")[0]}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-        <label className="approach-row approach-tone">
-          <span>Tom</span>
-          <select onChange={(selectEvent) => chooseTone(event, selectEvent.target.value as CutTone)} value={approach.tone}>
-            {toneOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-        </label>
-      </fieldset>
-    );
-  }
-
   function renderEditor() {
     const episodeLabel =
       phase === "editPremiere" ? "Estreia"
@@ -1655,167 +1773,219 @@ export default function Home() {
     const importantBlockInTimeline = weekOneImportantEventChain
       ? timeline.some((item) => item.kind === "important-event" && item.chainId === weekOneImportantEventChain.id)
       : false;
-    const showImportantFootage = week === 1 && Boolean(weekOneImportantEventChain && importantCardEdit);
+    const showImportantFootage = week === 1 && !importantBlockInTimeline && Boolean(weekOneImportantEventChain && importantCardEdit);
+    const transmissionBlocked = eventCount < 2 || missingRequiredEvents.length > 0;
+    const transmissionStatus = eventCount < 2
+      ? "Inclua pelo menos dois acontecimentos."
+      : missingRequiredEvents.length > 0
+        ? "Inclua todos os cortes obrigatórios."
+        : "Pronto para transmitir.";
+    const episodeNumber = String(week * 3 - (phase === "editPremiere" || phase === "editChallenge" ? 2 : phase === "editVote" ? 1 : 0)).padStart(2, "0");
+    const timelineDurationMinutes = timelineDurationSeconds / 60;
+    const durationMarkerPercent = Math.max(0, Math.min(100,
+      (timelineDurationMinutes - EDITOR_DURATION_CONFIG.minMinutes)
+      / (EDITOR_DURATION_CONFIG.maxMinutes - EDITOR_DURATION_CONFIG.minMinutes) * 100));
+    const editorialNote = durationReading.label === "Longa"
+      ? "Episódio longo: a duração acima da faixa pode cansar a audiência."
+      : durationReading.label === "Curta"
+        ? "Episódio curto: a duração abaixo da faixa pode afetar a recepção do público."
+        : focusReading.label.startsWith("Concentrado")
+          ? `${focusReading.label}. Confira se esse é o foco desejado.`
+          : "A montagem está equilibrada para transmissão.";
+    const dropZone = (index: number) => (
+      <button
+        aria-label={`Posição ${index + 1}: soltar acontecimento aqui`}
+        className={`timeline-drop-zone${dragged ? " is-active" : ""}`}
+        key={`drop-${index}`}
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => {
+          event.stopPropagation();
+          dropOnTimeline(index);
+        }}
+        type="button"
+      >
+        <b>BLOCO {index + 1}</b>
+        <span aria-hidden="true">+</span>
+        <small>SOLTE AQUI</small>
+      </button>
+    );
+
     return (
       <div className="editor-panel">
         <div className="editor-heading">
           <div>
-            <span className="eyebrow">ILHA DE EDIÇÃO · EP {String(week * 3 - (phase === "editPremiere" || phase === "editChallenge" ? 2 : phase === "editVote" ? 1 : 0)).padStart(2, "0")}</span>
+            <span className="eyebrow">ILHA DE EDIÇÃO · EP {episodeNumber}</span>
             <h2>{episodeLabel}</h2>
           </div>
-          <div className="runtime">
-            <span>DURAÇÃO</span>
-            <b>{formatClockDuration(timelineDurationSeconds)}</b>
-            <small>4 intervalos fixos · 16 min</small>
+          <div className="editor-heading-rule">
+            <div className="heading-current-duration">
+              <span>DURAÇÃO</span>
+              <b>{formatClockDuration(timelineDurationSeconds)}</b>
+            </div>
+            <div className="heading-duration-range">
+              <span>FAIXA IDEAL {EDITOR_DURATION_CONFIG.minMinutes}–{EDITOR_DURATION_CONFIG.maxMinutes} MIN</span>
+              <div className="duration-range-scale" aria-label={`Duração atual: ${formatClockDuration(timelineDurationSeconds)}. Faixa ideal de ${EDITOR_DURATION_CONFIG.minMinutes} a ${EDITOR_DURATION_CONFIG.maxMinutes} minutos.`}>
+                <b>{EDITOR_DURATION_CONFIG.minMinutes}</b>
+                <div>
+                  <i />
+                  <em style={{ left: `${durationMarkerPercent}%` }} />
+                  <small className={`duration-current-label is-${durationReading.state}`} style={{ left: `${durationMarkerPercent}%` }}>{formatClockDuration(timelineDurationSeconds)}</small>
+                </div>
+                <b>{EDITOR_DURATION_CONFIG.maxMinutes}</b>
+              </div>
+            </div>
           </div>
         </div>
 
-        <section className="timeline-section">
-          <div className="section-label">
-            <span>Linha do programa</span>
-            <small>Arraste para organizar · setas também movem os blocos</small>
-          </div>
-          <div
-            className="timeline"
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={() => dropOnTimeline()}
-          >
-            {timeline.map((item, index) => (
-              <article
-                className={`timeline-item timeline-${item.kind}`}
-                draggable
-                key={item.id}
-                onDragStart={() => setDragged({ source: "timeline", id: item.id })}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => {
-                  event.stopPropagation();
-                  dropOnTimeline(index);
-                }}
-              >
-                <div className="timeline-index">{String(index + 1).padStart(2, "0")}</div>
-                <div>
-                  <span>
-                    {item.kind === "ad"
-                      ? "COMERCIAL · FIXO"
-                      : item.kind === "important-event"
-                        ? "ACONTECIMENTO IMPORTANTE"
-                        : item.category}
-                  </span>
-                  <h3>{item.title}</h3>
-                  <small>{item.kind === "important-event" ? formatClockDuration(item.edit.finalDurationSeconds) : `${item.duration} min`}</small>
-                  {item.kind === "event" && week >= 2 && (
-                    <small className="timeline-approach">{approachSummary(item)}</small>
-                  )}
-                  {item.kind === "important-event" && (
-                    <small className="timeline-important-summary">
-                      Foco: {importantMainFocusLabel(withAutomaticImportantAnalysis(item.edit).mainFocusParticipantIds)}
-                      <br />
-                      Construção: {importantEventConstructionLabels[withAutomaticImportantAnalysis(item.edit).detectedEditorialConstruction]}
-                      <br />
-                      Momentos utilizados: {item.edit.selectedBeatIds.length} de {weekOneImportantEventBeats.length}
-                    </small>
-                  )}
-                </div>
-                <div className="timeline-controls">
-                  <button aria-label={`Mover ${item.title} para a esquerda`} disabled={index === 0} onClick={() => moveItem(index, -1)} type="button">←</button>
-                  <button aria-label={`Mover ${item.title} para a direita`} disabled={index === timeline.length - 1} onClick={() => moveItem(index, 1)} type="button">→</button>
-                  {item.kind === "important-event" && (
-                    <button aria-label={`Editar ${item.title}`} onClick={() => openImportantEventEditor(item.chainId)} type="button">✎</button>
-                  )}
-                  {item.kind !== "ad" && (
-                    <button aria-label={`Remover ${item.title}`} onClick={() => removeEvent(item.id)} type="button">×</button>
-                  )}
-                </div>
-              </article>
-            ))}
-            {timeline.length === 4 && <p className="timeline-hint">Solte acontecimentos aqui para construir o episódio.</p>}
-          </div>
-        </section>
-
-        <section className="event-bank">
-          <div className="section-label">
-            <span>Acontecimentos gravados</span>
-            <small>{availableEvents.length + (showImportantFootage ? 1 : 0)} cortes disponíveis</small>
-          </div>
-          <div className="event-filters">
-            <label>
-              <span className="sr-only">Buscar acontecimentos</span>
-              <input onChange={(event) => setSearch(event.target.value)} placeholder="Buscar corte…" type="search" value={search} />
-            </label>
-            <label>
-              <span className="sr-only">Filtrar por categoria</span>
-              <select onChange={(event) => setCategory(event.target.value)} value={category}>
-                {["Todos", "Convivência", "Conflito", "Humor", "Prova", "Festa", "Votação", "Memória"].map((item) => (
-                  <option key={item}>{item}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span className="sr-only">Ordenar acontecimentos</span>
-              <select onChange={(event) => setSort(event.target.value)} value={sort}>
-                <option value="gravacao">Ordem de gravação</option>
-                <option value="duracao">Menor duração</option>
-              </select>
-            </label>
-          </div>
-          <div className={`event-grid${week >= 2 ? " event-grid-approach" : ""}`}>
-            {showImportantFootage && weekOneImportantEventChain && importantCardEdit && (
-              <article className="event-card important-footage-card">
-                <div className="important-footage-heading">
-                  <span className="important-event-badge"><b aria-hidden="true">!</b> ACONTECIMENTO IMPORTANTE</span>
-                  <i>{importantBlockInTimeline ? "NA TIMELINE" : importantEventStatusLabels[importantEdit?.status ?? "not_edited"]}</i>
-                </div>
-                <h3>{weekOneImportantEventChain.title}</h3>
-                <div className="important-footage-participants">
-                  {weekOneImportantEventChain.participantIds.map((id) => {
-                    const participant = participants.find((candidate) => candidate.id === id);
-                    return participant ? <Avatar key={participant.id} participant={participant} size="small" /> : null;
+        <div className="editor-workspace">
+          <div className="editor-main-column">
+            <section className="timeline-section" aria-labelledby="timeline-title">
+              <div className="section-label">
+                <span id="timeline-title">Linha do programa</span>
+                <small>Arraste os blocos ou use as setas para reorganizar</small>
+              </div>
+              <div className="timeline-scroll">
+                <div className={`timeline-track${eventCount > 0 ? " has-editorial-items" : ""}`}>
+                  {dropZone(0)}
+                  {timeline.flatMap((item, index) => {
+                    const isDragging = dragged?.source === "timeline" && dragged.id === item.id;
+                    return [
+                      <article
+                        aria-grabbed={isDragging}
+                        className={`timeline-item timeline-${item.kind}${isDragging ? " is-dragging" : ""}${highlightedEditorItemId === item.id ? " is-new" : ""}`}
+                        draggable
+                        key={item.id}
+                        onDragEnd={() => setDragged(null)}
+                        onDragStart={() => setDragged({ source: "timeline", id: item.id })}
+                        tabIndex={0}
+                      >
+                        {item.kind === "ad" ? (
+                          <div className="timeline-ad-copy">
+                            <span className="timeline-drag-handle" aria-label={`Arrastar ${item.title}`}>⠿</span>
+                            <b>INTERVALO</b>
+                            <strong>{item.title.replace("Intervalo ", "")}</strong>
+                            <small>{item.duration} MIN</small>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="timeline-item-heading">
+                              <span className="timeline-index">{String(index + 1).padStart(2, "0")}</span>
+                              <span className="timeline-kind-label">{item.kind === "important-event" ? "ACONTECIMENTO IMPORTANTE" : item.requiredAnchor ? `${item.category} · OBRIGATÓRIO` : item.category}</span>
+                              <span className="timeline-drag-handle" aria-label={`Arrastar ${item.title}`}>⠿</span>
+                            </div>
+                            <h3>{item.title}</h3>
+                            <div className="timeline-item-meta">
+                              <b>{item.kind === "important-event" ? formatClockDuration(item.edit.finalDurationSeconds) : `${item.duration} min`}</b>
+                              {item.kind === "important-event" && <span>{item.edit.selectedBeatIds.length} MOMENTOS · {importantEventStatusLabels[item.edit.status]}</span>}
+                            </div>
+                          </>
+                        )}
+                        <div className="timeline-controls">
+                          <button aria-label={`Mover ${item.title} para a esquerda`} disabled={index === 0} onClick={() => moveItem(index, -1)} type="button">←</button>
+                          <button aria-label={`Mover ${item.title} para a direita`} disabled={index === timeline.length - 1} onClick={() => moveItem(index, 1)} type="button">→</button>
+                          {item.kind === "important-event" && <button aria-label={`Editar ${item.title}`} onClick={() => openImportantEventEditor(item.chainId)} type="button">EDITAR</button>}
+                          {item.kind !== "ad" && <button aria-label={`Remover ${item.title}`} onClick={() => removeEvent(item.id)} type="button">×</button>}
+                        </div>
+                      </article>,
+                      dropZone(index + 1),
+                    ];
                   })}
-                  <span>{participantNames(weekOneImportantEventChain.participantIds)}</span>
                 </div>
-                <dl>
-                  <div><dt>Momentos gravados</dt><dd>{weekOneImportantEventBeats.length}</dd></div>
-                  <div><dt>Duração estimada</dt><dd>{formatClockDuration(importantCardEdit.finalDurationSeconds)}</dd></div>
-                  <div><dt>Status da edição</dt><dd>{importantEventStatusLabels[importantEdit?.status ?? "not_edited"]}</dd></div>
-                </dl>
-                <button onClick={() => openImportantEventEditor(weekOneImportantEventChain.id)} type="button">
-                  Editar acontecimento
-                </button>
-              </article>
-            )}
-            {availableEvents.map((event) => (
-              <article
-                className={`event-card${event.requiredAnchor ? " is-required" : ""}`}
-                data-category={event.category}
-                draggable
-                key={event.id}
-                onDragStart={() => setDragged({ source: "bank", id: event.id })}
-                title={event.description}
-              >
-                <div className="event-card-top">
-                  <span>{event.requiredAnchor ? `${event.category} · OBRIGATÓRIO` : event.category}</span>
-                  <b>{event.duration} min</b>
+              </div>
+            </section>
+
+            <section className="event-bank" aria-labelledby="event-bank-title">
+              <div className="event-bank-toolbar">
+                <div className="section-label"><span id="event-bank-title">Banco de acontecimentos</span></div>
+                <label><span className="sr-only">Buscar acontecimentos</span><input onChange={(event) => setSearch(event.target.value)} placeholder="Buscar…" type="search" value={search} /></label>
+                <label><span className="sr-only">Filtrar por categoria</span><select onChange={(event) => setCategory(event.target.value)} value={category}>{["Todos", "Convivência", "Conflito", "Humor", "Prova", "Festa", "Votação", "Memória"].map((item) => <option key={item}>{item}</option>)}</select></label>
+                <label><span className="sr-only">Ordenar acontecimentos</span><select onChange={(event) => setSort(event.target.value)} value={sort}><option value="gravacao">Ordem de gravação</option><option value="duracao">Menor duração</option></select></label>
+                <b>{availableEvents.length + (showImportantFootage ? 1 : 0)} DISPONÍVEIS</b>
+              </div>
+              <div className="event-bank-content">
+                <div className="event-grid">
+                  {showImportantFootage && weekOneImportantEventChain && importantCardEdit && (
+                    <article className="event-card important-footage-card">
+                      <div className="important-footage-heading">
+                        <span className="important-event-badge"><b aria-hidden="true">!</b> ACONTECIMENTO IMPORTANTE</span>
+                        <i>{importantCardEdit.status === "ready" ? "Editado" : importantEventStatusLabels[importantCardEdit.status]}</i>
+                      </div>
+                      <h3>{weekOneImportantEventChain.title}</h3>
+                      <p>{weekOneImportantEventBeats.length} momentos · {formatClockDuration(importantCardEdit.finalDurationSeconds)}</p>
+                      <div className="important-card-footer">
+                        <div className="event-card-participants">{weekOneImportantEventChain.participantIds.map((id) => { const participant = participants.find((candidate) => candidate.id === id); return participant ? <Avatar key={participant.id} participant={participant} size="small" /> : null; })}</div>
+                        <button onClick={() => openImportantEventEditor(weekOneImportantEventChain.id)} type="button">{importantCardEdit.status === "not_edited" ? "EDITAR" : "REABRIR"}</button>
+                      </div>
+                    </article>
+                  )}
+                  {availableEvents.map((event) => {
+                  const eventParticipants = participantIdsForEditorEvent(event)
+                    .map((id) => participants.find((participant) => participant.id === id))
+                    .filter((participant): participant is Participant => Boolean(participant));
+                  const isDragging = dragged?.source === "bank" && dragged.id === event.id;
+                  return (
+                    <article
+                      aria-grabbed={isDragging}
+                      className={`event-card${event.requiredAnchor ? " is-required" : ""}${isDragging ? " is-dragging" : ""}${highlightedEditorItemId === event.id ? " is-located" : ""}`}
+                      data-category={event.category}
+                      draggable
+                      id={`editor-bank-${event.id}`}
+                      key={event.id}
+                      onDragEnd={() => setDragged(null)}
+                      onDragStart={() => setDragged({ source: "bank", id: event.id })}
+                      tabIndex={-1}
+                    >
+                      <div className="event-card-top">
+                        <div className="event-card-labels"><span>{event.category}</span>{event.requiredAnchor && <em className="required-badge">OBRIGATÓRIO</em>}</div>
+                        <b>{event.duration} min</b>
+                      </div>
+                      <h3>{event.title}</h3>
+                      <p>{event.description}</p>
+                      <div className="event-card-footer">
+                        <div className="event-card-participants" aria-label={eventParticipants.length ? `Participantes: ${eventParticipants.map((participant) => participant.name).join(", ")}` : "Sem participantes associados"}>{eventParticipants.map((participant) => <Avatar key={participant.id} participant={participant} size="small" />)}</div>
+                        <button aria-label={`Adicionar ${event.title} à linha do programa`} onClick={() => addEvent(event)} type="button">+ ADICIONAR</button>
+                      </div>
+                    </article>
+                  );
+                  })}
+                  {availableEvents.length === 0 && <p className="no-results">Nenhum corte corresponde aos filtros.</p>}
                 </div>
-                <h3>{event.title}</h3>
-                <p className="sr-only">{event.description}</p>
-                {renderApproachControls(event)}
-                <button
-                  aria-label={`Adicionar ${event.title} à timeline`}
-                  onClick={() => addEvent(event)}
-                  type="button"
-                >
-                  :: arraste ou clique para adicionar
-                </button>
-              </article>
-            ))}
-            {availableEvents.length === 0 && !showImportantFootage && <p className="no-results">Nenhum corte corresponde aos filtros.</p>}
+              </div>
+            </section>
           </div>
-        </section>
-        <div className="panel-actions sticky-actions">
-          <button className="button button-primary" onClick={confirmEdit} type="button">Fechar corte e transmitir</button>
-          <span className={editorError ? "editor-error" : "status-note"}>
-            {editorError || `${eventCount} acontecimentos · audiência prevista ${predictedAudience} pts`}
-          </span>
+
+          <aside className="editor-state-panel" aria-label="Estado do corte">
+            <header><span>ESTADO DO CORTE</span></header>
+            <section className={`cut-duration-state state-card is-${durationReading.state}`}>
+              <span>DURAÇÃO</span>
+              <strong>{formatClockDuration(timelineDurationSeconds)}</strong>
+              <p className={`reading-state is-${durationReading.state}`}>
+                {durationReading.label === "Adequada" ? "Dentro da faixa ideal" : durationReading.label === "Curta" ? "Abaixo da faixa ideal" : "Acima da faixa ideal"}
+              </p>
+            </section>
+            <section className={`required-state state-card${missingRequiredEvents.length > 0 ? " has-missing" : " is-complete"}`}>
+              <div className="state-section-title"><span>OBRIGATÓRIOS</span><b>{requiredEventCatalog.length - missingRequiredEvents.length}/{requiredEventCatalog.length}</b></div>
+              {requiredEventCatalog.length === 0 ? <p>Nenhum acontecimento obrigatório neste episódio.</p> : (
+                <ul>{requiredEventCatalog.map((event) => <li className={event.included ? "is-included" : "is-missing"} key={event.id}><span aria-hidden="true">{event.included ? "✓" : "!"}</span><b>{event.title}</b>{!event.included && <button onClick={() => locateRequiredEvent(event.id)} type="button">LOCALIZAR</button>}</li>)}</ul>
+              )}
+              {missingRequiredEvents.length > 0 && <p>Sem os obrigatórios, não é possível fechar o corte e transmitir.</p>}
+            </section>
+            <section className="editorial-reading state-card">
+              <div className="state-section-title"><span>LEITURA EDITORIAL</span></div>
+              <dl>
+                <div><dt><i className={`reading-dot is-${rhythmReading.state}`} />Ritmo</dt><dd>{rhythmReading.label}</dd></div>
+                <div><dt><i className={`reading-dot is-${focusReading.state}`} />Foco</dt><dd className={`is-${focusReading.state}`}>{focusReading.label}</dd></div>
+                <div><dt><i className={`reading-dot is-${varietyReading.state}`} />Variedade</dt><dd>{varietyReading.label}</dd></div>
+                <div><dt><i className={`reading-dot is-${durationReading.state}`} />Duração</dt><dd>{durationReading.label}</dd></div>
+              </dl>
+              <p className="editorial-note"><span aria-hidden="true">▧</span>{editorialNote}</p>
+            </section>
+            <section className="cut-counts"><div><span>▦</span><b>{eventCount} acontecimentos</b></div><div><span>◷</span><b>{timeline.filter((item) => item.kind === "ad").length} intervalos</b></div></section>
+            <div className="editor-transmit-area">
+              <button className="button button-primary" disabled={transmissionBlocked} onClick={confirmEdit} type="button">FECHAR CORTE E TRANSMITIR</button>
+              <span aria-live="polite" className={editorError ? "editor-error" : "status-note"}>{editorError || transmissionStatus}</span>
+            </div>
+          </aside>
         </div>
       </div>
     );
@@ -2077,6 +2247,9 @@ export default function Home() {
     );
   }
 
+  const currentGuideMessage = guideMessage();
+  const guideVisible = dismissedGuideMessage !== currentGuideMessage;
+
   return (
     <main className={`computer-shell theme-${theme}`} data-shadow-revision={shadowGameState.revision}>
       <RestartGameControl onConfirm={restartSeason} />
@@ -2109,15 +2282,28 @@ export default function Home() {
         </section>
       )}
 
-      <aside className="guide-bubble" aria-live="polite">
-        <div className="guide-copy"><span>PLIN // ASSISTENTE DE PRODUÇÃO</span><p>{guideMessage()}</p></div>
-        <div className="guide-tail" aria-hidden="true" />
-        <div className="plin" aria-label="PLIN, mascote da central de produção">
-          <i className="antenna a1" /><i className="antenna a2" />
-          <div className="plin-screen"><i /><i /><b /></div>
-          <span />
-        </div>
-      </aside>
+      {guideVisible && (
+        <aside className="guide-bubble" aria-live="polite">
+          <div className="guide-copy">
+            <button
+              aria-label="Fechar assistente"
+              className="guide-close"
+              onClick={() => setDismissedGuideMessage(currentGuideMessage)}
+              type="button"
+            >
+              ×
+            </button>
+            <span>PLIN // ASSISTENTE DE PRODUÇÃO</span>
+            <p>{currentGuideMessage}</p>
+          </div>
+          <div className="guide-tail" aria-hidden="true" />
+          <div className="plin" aria-label="PLIN, mascote da central de produção">
+            <i className="antenna a1" /><i className="antenna a2" />
+            <div className="plin-screen"><i /><i /><b /></div>
+            <span />
+          </div>
+        </aside>
+      )}
 
       <footer className="taskbar">
         <button className="task-start" type="button"><span>RP</span> INICIAR</button>

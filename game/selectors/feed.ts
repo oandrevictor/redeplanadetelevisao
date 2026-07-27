@@ -6,6 +6,8 @@ export type FeedEntry = {
   camera: string;
   title: string;
   body: string;
+  category: string;
+  participantIds: string[];
   eventInstanceId: string;
 };
 
@@ -25,6 +27,8 @@ export function toFeedEntry(event: EventInstance): FeedEntry {
     camera: `CAM ${String(cameraNumber).padStart(2, "0")} · ${locations[(event.sequence - 1) % locations.length]}`,
     title: event.title,
     body: event.description,
+    category: event.category,
+    participantIds: [...event.actorIds],
   };
 }
 
