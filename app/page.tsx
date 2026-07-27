@@ -9,7 +9,10 @@ import {
 } from "@/game/content/legacy-feed";
 import { reduceGame } from "@/game/reducer";
 import { selectAvailableFootage } from "@/game/selectors/episode-bank";
-import { toFootageView } from "@/game/selectors/event-view";
+import {
+  isRequiredEpisodeFootage,
+  toEpisodeFootageView,
+} from "@/game/selectors/event-view";
 import { selectFeedEvents } from "@/game/selectors/feed";
 import { selectLegacyAudienceVoteChoice } from "@/game/selectors/legacy-audience-vote";
 import type {
@@ -1068,13 +1071,9 @@ export default function Home() {
     () => selectFeedEvents(shadowGameState, "party", week),
     [shadowGameState, week],
   );
-  const generatedFootage = useMemo(
-    () => shadowGameState.house.eventHistory.map(toFootageView),
-    [shadowGameState],
-  );
-  const editorEventCatalog = useMemo<RecordedEvent[]>(
-    () => [...recordedEvents, ...generatedFootage],
-    [generatedFootage],
+  const canonicalEventById = useMemo(
+    () => new Map(shadowGameState.house.eventHistory.map((event) => [event.id, event])),
+    [shadowGameState.house.eventHistory],
   );
 
   const episodeBankEvents = useMemo(() => {
@@ -1089,7 +1088,7 @@ export default function Home() {
       week,
       episodeKind,
       excludedInstanceIds: selectedIds,
-    }).map(toFootageView);
+    }).map((event) => toEpisodeFootageView(event, episodeKind));
     const ids =
       phase === "editPremiere"
         ? ["chegadas", "mala-trocada", "pacto-varanda", "cafe-sem-acucar", "prova-lider", "confessionario"]
@@ -1124,8 +1123,14 @@ export default function Home() {
   );
   const eventCount = timeline.filter((item) => item.kind === "event" || item.kind === "important-event").length;
   const selectedEventIds = new Set(timeline.filter((item) => item.kind === "event").map((item) => item.id));
+  const isRequiredForCurrentEdit = (event: Pick<RecordedEvent, "id" | "requiredAnchor">) => {
+    const canonicalEvent = canonicalEventById.get(event.id);
+    return canonicalEvent
+      ? isRequiredEpisodeFootage(canonicalEvent, episodeKindForPhase(phase))
+      : Boolean(event.requiredAnchor);
+  };
   const requiredEventCatalog = [...timeline.filter((item): item is TimelineItem & { kind: "event" } => item.kind === "event"), ...episodeBankEvents]
-    .filter((event) => event.requiredAnchor)
+    .filter(isRequiredForCurrentEdit)
     .filter((event, index, events) => events.findIndex((candidate) => candidate.id === event.id) === index)
     .map((event) => ({ id: event.id, title: event.title, included: selectedEventIds.has(event.id) }));
   const missingRequiredEvents = requiredEventCatalog.filter((event) => !event.included);
@@ -1147,7 +1152,6 @@ export default function Home() {
   const editorialAlerts = buildEditorialAlerts(durationReading, focusReading, varietyReading, rhythmReading);
   const plannedEpisode = useMemo<BroadcastEpisode>(() => {
     const kind = episodeKindForPhase(phase);
-    const eventById = new Map(shadowGameState.house.eventHistory.map((event) => [event.id, event]));
     const segments = timeline.map<BroadcastSegment>((item, index) => {
       if (item.kind === "ad") {
         return {
@@ -1194,7 +1198,7 @@ export default function Home() {
           storylineHook: 0.9,
         };
       }
-      const canonicalEvent = eventById.get(item.id);
+      const canonicalEvent = canonicalEventById.get(item.id);
       const participantIds = involvedIdsFor(item);
       return {
         id: item.id,
@@ -1222,7 +1226,7 @@ export default function Home() {
       schedule: { ...AUDIENCE_SCHEDULES[kind] },
       segments,
     };
-  }, [involvedIdsFor, phase, shadowGameState.house.eventHistory, shadowGameState.seasonId, timeline, week]);
+  }, [canonicalEventById, involvedIdsFor, phase, shadowGameState.seasonId, timeline, week]);
   const plannedCuts = useMemo(() => {
     const knownEventIds = new Set(shadowGameState.house.eventHistory.map((event) => event.id));
     return timeline
@@ -1462,7 +1466,7 @@ export default function Home() {
   function dropOnTimeline(targetIndex?: number) {
     if (!dragged) return;
     if (dragged.source === "bank") {
-      const event = editorEventCatalog.find((item) => item.id === dragged.id);
+      const event = episodeBankEvents.find((item) => item.id === dragged.id);
       if (!event || timeline.some((item) => item.id === event.id)) return;
       setTimeline((current) => {
         const next = [...current];
@@ -2181,6 +2185,7 @@ export default function Home() {
                   {emptyProgramZones.has(0) && dropZone(0, 0)}
                   {timeline.flatMap((item, index) => {
                     const isDragging = dragged?.source === "timeline" && dragged.id === item.id;
+                    const isRequiredItem = item.kind === "event" && isRequiredForCurrentEdit(item);
                     const followingBlockIndex = timeline.slice(0, index + 1).filter((candidate) => candidate.kind === "ad").length;
                     return [
                       <article
@@ -2203,7 +2208,7 @@ export default function Home() {
                           <>
                             <div className="timeline-item-heading">
                               <span className="timeline-index">{String(index + 1).padStart(2, "0")}</span>
-                              <span className="timeline-kind-label">{item.kind === "important-event" ? "ACONTECIMENTO IMPORTANTE" : item.requiredAnchor ? `${item.category} · OBRIGATÓRIO` : item.category}</span>
+                              <span className="timeline-kind-label">{item.kind === "important-event" ? "ACONTECIMENTO IMPORTANTE" : isRequiredItem ? `${item.category} · OBRIGATÓRIO` : item.category}</span>
                               <span className="timeline-drag-handle" aria-label={`Arrastar ${item.title}`}>⠿</span>
                             </div>
                             <h3>{item.title}</h3>
@@ -2301,10 +2306,11 @@ export default function Home() {
                     .map((id) => participants.find((participant) => participant.id === id))
                     .filter((participant): participant is Participant => Boolean(participant));
                   const isDragging = dragged?.source === "bank" && dragged.id === event.id;
+                  const isRequiredEvent = isRequiredForCurrentEdit(event);
                   return (
                     <article
                       aria-grabbed={isDragging}
-                      className={`event-card${event.requiredAnchor ? " is-required" : ""}${isDragging ? " is-dragging" : ""}${highlightedEditorItemId === event.id ? " is-located" : ""}`}
+                      className={`event-card${isRequiredEvent ? " is-required" : ""}${isDragging ? " is-dragging" : ""}${highlightedEditorItemId === event.id ? " is-located" : ""}`}
                       data-category={event.category}
                       draggable
                       id={`editor-bank-${event.id}`}
@@ -2314,7 +2320,7 @@ export default function Home() {
                       tabIndex={-1}
                     >
                       <div className="event-card-top">
-                        <div className="event-card-labels"><span>{event.category}</span>{event.requiredAnchor && <em className="required-badge">OBRIGATÓRIO</em>}</div>
+                        <div className="event-card-labels"><span>{event.category}</span>{isRequiredEvent && <em className="required-badge">OBRIGATÓRIO</em>}</div>
                         <b>{event.duration} min</b>
                       </div>
                       <h3>{event.title}</h3>

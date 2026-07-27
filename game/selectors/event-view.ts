@@ -1,4 +1,4 @@
-import type { EventInstance } from "../types";
+import type { EpisodeKind, EventInstance } from "../types";
 
 export type FootageView = {
   id: string;
@@ -23,5 +23,33 @@ export function toFootageView(event: EventInstance): FootageView {
     actorIds: [...event.actorIds],
     occurredAtWeek: event.occurredAt.week,
     requiredAnchor: event.templateId.startsWith("anchor:"),
+  };
+}
+
+export function isRequiredEpisodeFootage(
+  event: EventInstance,
+  episodeKind: EpisodeKind,
+): boolean {
+  if (episodeKind === "premiere" || episodeKind === "challenge") {
+    return event.templateId === "anchor:challenge-result";
+  }
+  if (episodeKind === "vote") {
+    return event.templateId === "anchor:nomination-result";
+  }
+  if (episodeKind === "elimination") {
+    return event.templateId === "anchor:elimination-result"
+      || event.templateId === "anchor:farewell";
+  }
+  return event.templateId === "anchor:finalist-speech"
+    || event.templateId === "anchor:season-retrospective";
+}
+
+export function toEpisodeFootageView(
+  event: EventInstance,
+  episodeKind: EpisodeKind,
+): FootageView {
+  return {
+    ...toFootageView(event),
+    requiredAnchor: isRequiredEpisodeFootage(event, episodeKind),
   };
 }

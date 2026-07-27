@@ -207,6 +207,10 @@ test("Edição uses the approved timeline, bank and persistent cut-state workspa
   assert.match(editorSource, /event-card-participants/);
   assert.match(editorSource, /required-badge/);
   assert.match(editorSource, /OBRIGATÓRIOS/);
+  assert.match(page, /toEpisodeFootageView\(event, episodeKind\)/);
+  assert.match(page, /isRequiredEpisodeFootage\(canonicalEvent, episodeKindForPhase\(phase\)\)/);
+  assert.match(page, /episodeBankEvents\.find\(\(item\) => item\.id === dragged\.id\)/);
+  assert.match(editorSource, /const isRequiredEvent = isRequiredForCurrentEdit\(event\)/);
   assert.match(editorSource, /locateRequiredEvent/);
   assert.match(editorSource, /Ritmo/);
   assert.match(editorSource, /Variedade/);

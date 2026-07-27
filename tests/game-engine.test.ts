@@ -12,6 +12,10 @@ import { reduceGame } from "../game/reducer";
 import { createRng, nextRandom } from "../game/rng";
 import { selectActiveCast } from "../game/selectors/active-cast";
 import { selectAvailableFootage } from "../game/selectors/episode-bank";
+import {
+  isRequiredEpisodeFootage,
+  toEpisodeFootageView,
+} from "../game/selectors/event-view";
 import { selectAudienceForecast } from "../game/selectors/audience-forecast";
 import { selectFeedEvents } from "../game/selectors/feed";
 import { simulateSeasons } from "../game/simulator";
@@ -245,6 +249,45 @@ test("episode bank uses unique event instances and preserves frozen historical a
     .some((event) => event.actorIds.includes(historicalActor)));
 });
 
+test("editor requirements are episode-scoped and individual ballots stay optional", () => {
+  let state = command(
+    createInitialState("episode-requirements", "dynamic", "legacy"),
+    { type: "START_SEASON", seed: "episode-requirements" },
+  );
+  state = command(state, { type: "CONFIRM_CHALLENGE", challengeType: "sorte" });
+  state = command(state, { type: "FORM_NOMINATION" });
+
+  const challenge = state.house.eventHistory.find(
+    (event) => event.templateId === "anchor:challenge-result",
+  );
+  const nomination = state.house.eventHistory.find(
+    (event) => event.templateId === "anchor:nomination-result",
+  );
+  const ballot = state.house.eventHistory.find(
+    (event) => event.templateId === "anchor:house-ballot",
+  );
+  assert.ok(challenge);
+  assert.ok(nomination);
+  assert.ok(ballot);
+
+  const eliminationResult = { ...nomination, templateId: "anchor:elimination-result" };
+  const farewell = { ...nomination, templateId: "anchor:farewell" };
+  const finalistSpeech = { ...nomination, templateId: "anchor:finalist-speech" };
+  const retrospective = { ...nomination, templateId: "anchor:season-retrospective" };
+
+  assert.equal(isRequiredEpisodeFootage(challenge, "premiere"), true);
+  assert.equal(isRequiredEpisodeFootage(challenge, "challenge"), true);
+  assert.equal(isRequiredEpisodeFootage(nomination, "vote"), true);
+  assert.equal(isRequiredEpisodeFootage(ballot, "vote"), false);
+  assert.equal(isRequiredEpisodeFootage(nomination, "elimination"), false);
+  assert.equal(isRequiredEpisodeFootage(ballot, "elimination"), false);
+  assert.equal(isRequiredEpisodeFootage(eliminationResult, "elimination"), true);
+  assert.equal(isRequiredEpisodeFootage(farewell, "elimination"), true);
+  assert.equal(isRequiredEpisodeFootage(finalistSpeech, "final"), true);
+  assert.equal(isRequiredEpisodeFootage(retrospective, "final"), true);
+  assert.equal(toEpisodeFootageView(ballot, "elimination").requiredAnchor, false);
+});
+
 test("serialized saves restore the exact event queue and RNG state", () => {
   let state = command(createInitialState("save", "dynamic"), { type: "START_SEASON", seed: "save" });
   state = command(state, { type: "CONFIRM_CHALLENGE", challengeType: "resistencia" });
@@ -324,6 +367,9 @@ test("nominations store individual relationship-driven ballots and editable moti
   const ballotFootage = selectAvailableFootage(state, { week: 1, episodeKind: "elimination" })
     .filter((event) => event.templateId === "anchor:house-ballot");
   assert.equal(ballotFootage.length, nomination.ballots.length);
+  assert.ok(ballotFootage.every(
+    (event) => !toEpisodeFootageView(event, "elimination").requiredAnchor,
+  ));
 });
 
 test("changing a leader relationship changes the nomination target", () => {
