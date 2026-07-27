@@ -38,7 +38,9 @@ import {
   classifyVariety,
   insertIntoFirstEmptyProgramZone,
   moveTimelineItem,
+  reconcileTimelineWithCanonicalHistory,
   removeEditorialTimelineItem,
+  selectEditorEpisodeBank,
   validateEditorCut,
 } from "./editor-analysis";
 
@@ -1076,6 +1078,32 @@ export default function Home() {
     [shadowGameState.house.eventHistory],
   );
 
+  useEffect(() => {
+    if (
+      !engineControls.ready
+      || !uiSaveReady.current
+      || shadowGameState.audienceModel.mode === "legacy"
+    ) return;
+    const reconciled = reconcileTimelineWithCanonicalHistory(
+      timeline,
+      canonicalEventById.keys(),
+    );
+    if (reconciled === timeline) return;
+    const frame = window.requestAnimationFrame(() => {
+      setTimeline(reconciled);
+      if (isEditPhase) {
+        setEditorError("Um bloco antigo sem gravação canônica foi removido. Escolha outro acontecimento do banco.");
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [
+    canonicalEventById,
+    engineControls.ready,
+    isEditPhase,
+    shadowGameState.audienceModel.mode,
+    timeline,
+  ]);
+
   const episodeBankEvents = useMemo(() => {
     const episodeKind =
       phase === "editPremiere" ? "premiere"
@@ -1101,10 +1129,13 @@ export default function Home() {
             : ["melhores-semana", "festa-neon", "prova-lider", "discursos-final", "confessionario"];
 
     const dynamicEpisode = phase === "editPremiere" || phase === "editChallenge" || phase === "editVote" || phase === "editElimination" || phase === "editFinal";
-    const events: RecordedEvent[] = dynamicEpisode && shadowGameState.mode === "dynamic" && dynamicEvents.length >= 2
-      ? dynamicEvents
-      : secondaryEvents.filter((event) => ids.includes(event.id) && !selectedIds.has(event.id));
-    return events;
+    const legacyEvents = secondaryEvents.filter(
+      (event) => ids.includes(event.id) && !selectedIds.has(event.id),
+    );
+    return selectEditorEpisodeBank<RecordedEvent>(dynamicEvents, legacyEvents, {
+      requiresCanonicalHistory: shadowGameState.audienceModel.mode !== "legacy",
+      dynamicEngine: dynamicEpisode && shadowGameState.mode === "dynamic",
+    });
   }, [phase, timeline, shadowGameState, week]);
 
   const availableEvents = useMemo(() => {

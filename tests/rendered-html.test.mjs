@@ -181,11 +181,15 @@ test("Edição uses the approved timeline, bank and persistent cut-state workspa
   assert.match(analysis, /classifyFocus/);
   assert.match(analysis, /buildEditorialAlerts/);
   assert.match(analysis, /firstEmptyProgramZoneIndex/);
+  assert.match(analysis, /selectEditorEpisodeBank/);
+  assert.match(analysis, /reconcileTimelineWithCanonicalHistory/);
   assert.match(analysis, /item\.kind === "ad" \|\| item\.id !== id/);
 
   assert.match(editorSource, /editor-workspace/);
   assert.match(editorSource, /timeline-drop-zone/);
   assert.match(editorSource, /timeline-ad-copy/);
+  assert.match(page, /requiresCanonicalHistory:\s*shadowGameState\.audienceModel\.mode !== "legacy"/);
+  assert.match(page, /Um bloco antigo sem gravação canônica foi removido/);
   assert.match(editorSource, /item\.kind !== "ad"/);
   assert.match(editorSource, /heading-current-duration/);
   assert.match(editorSource, /FAIXA IDEAL/);

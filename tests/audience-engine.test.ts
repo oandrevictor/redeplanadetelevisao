@@ -431,6 +431,26 @@ test("private house truth and unaired event changes cannot affect public audienc
   assert.deepEqual(baselineResult.state.rng, hiddenResult.state.rng);
 });
 
+test("noncanonical legacy footage remains rejected without changing state", () => {
+  const state = startedState("noncanonical-recap");
+  const before = structuredClone(state);
+  const broadcast = episode("forged-recap", [
+    contentSegment("melhores-semana", {
+      sourceEventId: "melhores-semana",
+      participantIds: [],
+      perspectiveIds: [],
+      signals: { vulnerability: 0.85, redemption: 0.75, relationships: 0.6 },
+      portrayals: {},
+    }),
+  ]);
+  const result = reduceGame(state, { type: "AIR_EPISODE", episode: broadcast });
+
+  assert.match(result.diagnostic ?? "", /outside canonical season history/i);
+  assert.deepEqual(result.state.rng, before.rng);
+  assert.deepEqual(result.state.audienceModel, before.audienceModel);
+  assert.deepEqual(result.state.broadcasts, before.broadcasts);
+});
+
 test("fandom grows gradually while negative awareness remains anti-fandom, not attachment", () => {
   let audience = initialAudience();
   let rng = createRng("gradual-fandom");

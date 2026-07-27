@@ -30,7 +30,9 @@ import {
   firstEmptyProgramZoneIndex,
   insertIntoFirstEmptyProgramZone,
   moveTimelineItem,
+  reconcileTimelineWithCanonicalHistory,
   removeEditorialTimelineItem,
+  selectEditorEpisodeBank,
   validateEditorCut,
 } from "../app/editor-analysis";
 
@@ -77,6 +79,47 @@ test("editor timeline keeps four movable, non-removable ads and fills program zo
   assert.equal(removeEditorialTimelineItem(withSecond, "ad-1").filter((item) => item.kind === "ad").length, 4);
   assert.equal(removeEditorialTimelineItem(withSecond, "event-1").some((item) => item.id === "event-1"), false);
   assert.deepEqual(moveTimelineItem(ads, 0, 1).map((item) => item.id), ["ad-2", "ad-1", "ad-3", "ad-4"]);
+});
+
+test("non-legacy editor banks and restored timelines remain canonical", () => {
+  const canonical = [{ id: "event-canonical", kind: "event" }];
+  const legacy = [{ id: "melhores-semana", kind: "event" }];
+  assert.strictEqual(
+    selectEditorEpisodeBank(canonical, legacy, {
+      requiresCanonicalHistory: true,
+      dynamicEngine: false,
+    }),
+    canonical,
+    "shadow/clustered broadcasts must not fall back when only one canonical event exists",
+  );
+  assert.strictEqual(
+    selectEditorEpisodeBank(canonical, legacy, {
+      requiresCanonicalHistory: false,
+      dynamicEngine: false,
+    }),
+    legacy,
+    "the legacy adapter retains its decorative catalog",
+  );
+
+  const restored = [
+    { id: "intervalo-1", kind: "ad" },
+    legacy[0],
+    canonical[0],
+    { id: "important-chain", kind: "important-event" },
+  ];
+  const reconciled = reconcileTimelineWithCanonicalHistory(
+    restored,
+    canonical.map((event) => event.id),
+  );
+  assert.deepEqual(
+    reconciled.map((item) => item.id),
+    ["intervalo-1", "event-canonical", "important-chain"],
+  );
+  assert.strictEqual(
+    reconcileTimelineWithCanonicalHistory(reconciled, ["event-canonical"]),
+    reconciled,
+    "an already-clean timeline should retain its identity",
+  );
 });
 
 test("editor validation blocks only editorial count and missing required events", () => {
