@@ -90,7 +90,10 @@ test("source contains the complete playable season loop", async () => {
   assert.match(page, /CLOSE_AUDIENCE_VOTE/);
   assert.match(page, /CLOSE_FINAL_VOTE/);
   assert.match(page, /Consolidando o painel…/);
-  assert.match(page, /Os votos de todas as coortes foram consolidados/);
+  assert.match(page, /showAudienceWorkflow/);
+  assert.match(page, /setView\("audience"\)/);
+  assert.match(page, /audience-workflow/);
+  assert.match(css, /\.computer-shell \.audience-workflow/);
   assert.match(page, /activeParticipants\.length === 3/);
   assert.match(css, /prefers-reduced-motion/);
   assert.match(css, /\.computer-shell \.feed-entry > div:not\(\.feed-line\)/);
@@ -165,6 +168,7 @@ test("Edição uses the approved timeline, bank and persistent cut-state workspa
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   const analysis = await readFile(new URL("../app/editor-analysis.ts", import.meta.url), "utf8");
+  const audienceReport = await readFile(new URL("../app/audience-report.tsx", import.meta.url), "utf8");
   const editorSource = page.slice(page.indexOf("function renderEditor()"), page.indexOf("function renderMail()"));
 
   assert.match(analysis, /minMinutes:\s*38/);
@@ -214,12 +218,15 @@ test("Edição uses the approved timeline, bank and persistent cut-state workspa
   assert.match(editorSource, /Inclua todos os cortes obrigatórios/);
   assert.match(editorSource, /Pronto para transmitir/);
   assert.match(editorSource, /!importantBlockInTimeline/);
-  assert.match(editorSource, /audience-forecast-card/);
-  assert.match(editorSource, /PREVISÃO DE AUDIÊNCIA/);
+  assert.doesNotMatch(editorSource, /audience-forecast-card/);
+  assert.doesNotMatch(editorSource, /PREVISÃO DE AUDIÊNCIA/);
   assert.match(editorSource, /ENQUADRAMENTO DO CORTE/);
   assert.match(editorSource, /Perspectiva/);
-  assert.match(editorSource, /RISCO DE FADIGA \/ RETORNO/);
-  assert.match(page, /const liveAudience = currentCheckpoint\?\.rating \?\? storedResult\?\.forecast\.expected \?\? predictedAudience/);
+  assert.doesNotMatch(editorSource, /RISCO DE FADIGA \/ RETORNO/);
+  assert.doesNotMatch(page, /selectAudienceForecastDetails|predictedAudience/);
+  assert.match(audienceReport, /forecast/);
+  assert.match(page, /phase === "liveElimination" \|\| phase === "weekSummary"/);
+  assert.match(page, /const liveAudience = currentCheckpoint\?\.rating[\s\S]*?storedResult\?\.forecast\.expected[\s\S]*?networkTargetPoints/);
 
   assert.match(css, /grid-template-columns:\s*minmax\(0, 81fr\) minmax\(200px, 19fr\)/);
   assert.match(css, /\.computer-shell \.timeline-track \.timeline-ad[\s\S]*?flex:\s*0 0 68px/);

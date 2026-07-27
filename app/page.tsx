@@ -8,7 +8,6 @@ import {
   partyFeed as extractedPartyFeed,
 } from "@/game/content/legacy-feed";
 import { reduceGame } from "@/game/reducer";
-import { selectAudienceForecastDetails } from "@/game/audience";
 import { selectAvailableFootage } from "@/game/selectors/episode-bank";
 import { toFootageView } from "@/game/selectors/event-view";
 import { selectFeedEvents } from "@/game/selectors/feed";
@@ -23,7 +22,7 @@ import type {
   TraitScore as DomainTraitScore,
 } from "@/game/types";
 import { deriveAudienceSignals } from "@/game/audience/signals";
-import { AUDIENCE_CLUSTERS, AUDIENCE_SCHEDULES } from "@/game/audience/catalog";
+import { AUDIENCE_SCHEDULES } from "@/game/audience/catalog";
 import { GameInspector } from "./game-inspector";
 import { AudienceReport } from "./audience-report";
 import { useGameEngine } from "./use-game-engine";
@@ -121,10 +120,16 @@ type CutApproach = {
 };
 
 function episodeKindForPhase(phase: Phase): EpisodeKind {
-  if (phase === "editPremiere") return "premiere";
-  if (phase === "editChallenge") return "challenge";
-  if (phase === "editVote") return "vote";
-  if (phase === "editElimination") return "elimination";
+  if (phase === "editPremiere" || phase === "livePremiere" || phase === "summaryPremiere") {
+    return "premiere";
+  }
+  if (phase === "editChallenge" || phase === "liveChallenge" || phase === "summaryChallenge") {
+    return "challenge";
+  }
+  if (phase === "editVote" || phase === "liveVote" || phase === "audienceVote") return "vote";
+  if (phase === "editElimination" || phase === "liveElimination" || phase === "weekSummary") {
+    return "elimination";
+  }
   return "final";
 }
 
@@ -1008,10 +1013,6 @@ export default function Home() {
   const latestAudienceBroadcast = audienceBroadcasts.at(-1) ?? null;
   const latestAudienceResult = latestAudienceBroadcast?.result ?? null;
   const currentWeekAudienceBroadcasts = audienceBroadcasts.filter((broadcast) => broadcast.week === week);
-  const currentWeekAverageRating = currentWeekAudienceBroadcasts.length > 0
-    ? currentWeekAudienceBroadcasts.reduce((sum, broadcast) => sum + (broadcast.result?.averageRating ?? 0), 0)
-      / currentWeekAudienceBroadcasts.length
-    : 0;
   const seasonPeakRating = audienceBroadcasts.reduce(
     (peak, broadcast) => Math.max(peak, broadcast.result?.peakRating ?? 0),
     0,
@@ -1208,7 +1209,8 @@ export default function Home() {
         portrayals: portrayalsForCut(participantIds, item.approach.perspectiveIds, item.approach.tone),
         contextCompleteness: item.approach.perspectiveIds.length < participantIds.length ? 0.58 : 0.82,
         storylineHook: Math.max(0.2, Math.min(1, item.heat / 100)),
-        revealsEliminatedParticipantId: canonicalEvent?.templateId === "anchor:elimination-result"
+        revealsEliminatedParticipantId: kind === "elimination"
+          && canonicalEvent?.templateId === "anchor:elimination-result"
           ? canonicalEvent.roleBindings.eliminated?.[0]
           : undefined,
       };
@@ -1231,30 +1233,6 @@ export default function Home() {
         tone: item.approach.tone,
       }));
   }, [shadowGameState.house.eventHistory, timeline]);
-  const audienceForecastDetails = selectAudienceForecastDetails(
-    shadowGameState.audienceModel,
-    plannedEpisode,
-  );
-  const audienceForecast = audienceForecastDetails.forecast;
-  const predictedAudience = audienceForecast.expected;
-  const forecastResonantCohorts = Object.entries(audienceForecastDetails.clusterTuneIn)
-    .toSorted((left, right) => right[1] - left[1])
-    .slice(0, 3)
-    .map(([clusterId]) => AUDIENCE_CLUSTERS.find((cluster) => cluster.id === clusterId)?.name ?? clusterId);
-  const forecastFatigueCohorts = AUDIENCE_CLUSTERS
-    .map((definition) => {
-      const cluster = shadowGameState.audienceModel.clusters[definition.id];
-      const values = Object.values(cluster?.interestFatigue ?? {});
-      return {
-        name: definition.name,
-        fatigue: values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0,
-        returnIntent: cluster?.returnIntent ?? 0,
-      };
-    })
-    .filter((cluster) => cluster.fatigue >= 0.45 || cluster.returnIntent <= 0.42)
-    .toSorted((left, right) => right.fatigue - left.fatigue || left.returnIntent - right.returnIntent)
-    .slice(0, 2);
-
   function begin() {
     setStarted(true);
     setPhase("email");
@@ -1579,13 +1557,24 @@ export default function Home() {
     startEdit("editVote");
   }
 
+  function showAudienceWorkflow(
+    nextPhase: Extract<
+      Phase,
+      "summaryPremiere" | "summaryChallenge" | "audienceVote" | "weekSummary" | "winnerVote"
+    >,
+  ) {
+    setPhase(nextPhase);
+    setView("audience");
+    setWindowOpen(true);
+  }
+
   function finishLive() {
     if (phase === "livePremiere") {
-      setPhase("summaryPremiere");
+      showAudienceWorkflow("summaryPremiere");
       return;
     }
     if (phase === "liveChallenge") {
-      setPhase("summaryChallenge");
+      showAudienceWorkflow("summaryChallenge");
       return;
     }
     if (phase === "liveVote") {
@@ -1598,7 +1587,7 @@ export default function Home() {
         ) ?? null;
         setAudiencePick(selectedId);
       }
-      setPhase("audienceVote");
+      showAudienceWorkflow("audienceVote");
       return;
     }
     if (phase === "liveElimination") {
@@ -1614,12 +1603,12 @@ export default function Home() {
       );
       setLastEliminatedId(eliminatedId);
       setActiveIds((current) => current.filter((id) => id !== eliminatedId));
-      setPhase("weekSummary");
+      showAudienceWorkflow("weekSummary");
       return;
     }
     if (phase === "liveFinal") {
       dispatchGame({ type: "CLOSE_FINAL_VOTE" });
-      setPhase("winnerVote");
+      showAudienceWorkflow("winnerVote");
     }
   }
 
@@ -2352,26 +2341,6 @@ export default function Home() {
                 {durationReading.label === "Adequada" ? "Dentro da faixa ideal" : durationReading.label === "Curta" ? "Abaixo da faixa ideal" : "Acima da faixa ideal"}
               </p>
             </section>
-            <section className="state-card audience-forecast-card">
-              <div className="state-section-title"><span>PREVISÃO DE AUDIÊNCIA</span></div>
-              <strong>
-                {audienceForecast.low.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}
-                {"–"}
-                {audienceForecast.high.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} pts
-              </strong>
-              <p>
-                Esperado: {predictedAudience.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} pontos.
-                Painel nacional ficcional.
-              </p>
-              <small>MAIOR AFINIDADE</small>
-              <p>{forecastResonantCohorts.join(" · ") || "Sem leitura suficiente"}</p>
-              {forecastFatigueCohorts.length > 0 && (
-                <>
-                  <small>RISCO DE FADIGA / RETORNO</small>
-                  <p>{forecastFatigueCohorts.map((cluster) => cluster.name).join(" · ")}</p>
-                </>
-              )}
-            </section>
             <section className={`required-state state-card${missingRequiredEvents.length > 0 ? " has-missing" : " is-complete"}`}>
               <div className="state-section-title"><span>OBRIGATÓRIOS</span><b>{requiredEventCatalog.length - missingRequiredEvents.length}/{requiredEventCatalog.length}</b></div>
               {requiredEventCatalog.length === 0 ? <p>Nenhum acontecimento obrigatório neste episódio.</p> : (
@@ -2431,11 +2400,186 @@ export default function Home() {
     );
   }
 
+  function renderAudienceWorkflow() {
+    if (phase === "summaryPremiere" || phase === "summaryChallenge") {
+      const premiere = phase === "summaryPremiere";
+      const result = latestAudienceResult;
+      const metTarget = (result?.averageRating ?? 0)
+        >= shadowGameState.audienceModel.market.networkTargetPoints;
+      return (
+        <section className="audience-workflow audience-workflow-summary" aria-labelledby="audience-workflow-title">
+          <header className="audience-workflow-heading">
+            <div>
+              <span>RELATÓRIO DE EXIBIÇÃO · EPISÓDIO {String(week * 3 - 2).padStart(2, "0")}</span>
+              <h2 id="audience-workflow-title">
+                {premiere
+                  ? metTarget ? "Estreia acima da meta" : "A estreia encontrou seu público"
+                  : `Liderança da semana ${week} definida`}
+              </h2>
+              <p>
+                {premiere
+                  ? `O elenco foi apresentado e ${leader?.name ?? "um participante"} encerrou a noite na liderança.`
+                  : `${leader?.name ?? "Um participante"} venceu a prova${challengeRunnerUp ? `, com ${challengeRunnerUp.name} na segunda colocação` : ""}.`}
+              </p>
+            </div>
+            <div className="audience-workflow-highlight">
+              <small>MÉDIA</small>
+              <b>{(result?.averageRating ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>
+              <span>pontos</span>
+            </div>
+          </header>
+          <footer className="audience-workflow-footer">
+            <p>O relatório completo desta transmissão está disponível abaixo.</p>
+            <button
+              className="button button-primary"
+              onClick={() => {
+                dispatchGame({ type: "START_PARTY" });
+                setPhase("feedParty");
+                setView("feed");
+                setWindowOpen(true);
+              }}
+              type="button"
+            >
+              Voltar ao feed da casa
+            </button>
+          </footer>
+        </section>
+      );
+    }
+
+    if (phase === "audienceVote" || phase === "winnerVote") {
+      const isFinalVote = phase === "winnerVote";
+      const choices = isFinalVote
+        ? activeParticipants
+        : participants.filter((participant) => nominees.includes(participant.id));
+      const resolvedVote = pendingAudienceVote?.kind === (isFinalVote ? "final" : "elimination")
+        ? pendingAudienceVote
+        : null;
+      const authoritativeChoiceId = shadowGameState.audienceModel.mode === "clustered"
+        ? resolvedVote?.selectedParticipantId ?? null
+        : isFinalVote
+          ? legacyFinalChoice
+          : audiencePick ?? legacyEliminationChoice;
+      const voteReady = Boolean(authoritativeChoiceId);
+      return (
+        <section className="audience-workflow audience-workflow-vote" aria-labelledby="audience-workflow-title">
+          <header className="audience-workflow-heading">
+            <div>
+              <span>{isFinalVote ? "GRANDE FINAL" : `SEMANA ${String(week).padStart(2, "0")} · VOTAÇÃO ENCERRADA`}</span>
+              <h2 id="audience-workflow-title">
+                {voteReady ? "Resultado consolidado" : "Consolidando o painel…"}
+              </h2>
+              <p>
+                {shadowGameState.audienceModel.mode === "shadow"
+                  ? "A projeção das 16 coortes foi registrada para calibração; o resultado oficial segue o modo de compatibilidade."
+                  : "A votação automática considerou participação, conhecimento, rejeição e proteção aos favoritos de cada coorte."}
+              </p>
+            </div>
+            <div className="audience-workflow-status">
+              <i aria-hidden="true" />
+              <span>{voteReady ? "RESULTADO BLOQUEADO" : "PROCESSANDO"}</span>
+            </div>
+          </header>
+          <div className={`audience-workflow-candidates candidates-${choices.length}`}>
+            {choices.map((participant) => {
+              const selected = authoritativeChoiceId === participant.id;
+              return (
+                <article className={selected ? "is-selected" : ""} key={participant.id}>
+                  <Avatar participant={participant} size="small" />
+                  <div>
+                    <span>{participant.city}</span>
+                    <b>{participant.name}</b>
+                    <small>
+                      {resolvedVote
+                        ? `${Math.round((resolvedVote.shares[participant.id] ?? 0) * 1000) / 10}% dos votos`
+                        : "Resultado de compatibilidade"}
+                    </small>
+                  </div>
+                  <em>{selected ? isFinalVote ? "VENCEDOR" : "MAIOR REJEIÇÃO" : "AMOSTRA"}</em>
+                </article>
+              );
+            })}
+          </div>
+          <footer className="audience-workflow-footer">
+            <p>Os detalhes de turnout, coortes e fandom permanecem no relatório abaixo.</p>
+            <button
+              className="button button-primary"
+              disabled={!voteReady}
+              onClick={isFinalVote ? voteWinner : confirmAudienceElimination}
+              type="button"
+            >
+              {isFinalVote ? "Revelar vencedor" : "Preparar programa de eliminação"}
+            </button>
+          </footer>
+        </section>
+      );
+    }
+
+    if (phase === "weekSummary") {
+      const finalists = activeParticipants.length === 3;
+      return (
+        <section className="audience-workflow audience-workflow-week" aria-labelledby="audience-workflow-title">
+          <header className="audience-workflow-heading">
+            <div>
+              <span>ARQUIVO SEMANAL · SEMANA {String(week).padStart(2, "0")}</span>
+              <h2 id="audience-workflow-title">
+                {finalists ? "Os três finalistas estão definidos" : `Semana ${week} encerrada`}
+              </h2>
+              <p>
+                {lastEliminated
+                  ? `${lastEliminated.name} deixou a casa. O histórico de seus fãs foi preservado para os impactos do próximo episódio.`
+                  : "A transmissão foi arquivada e os dados da semana estão consolidados."}
+              </p>
+            </div>
+            <div className="audience-workflow-highlight">
+              <small>NA CASA</small>
+              <b>{activeParticipants.length}</b>
+              <span>participantes</span>
+            </div>
+          </header>
+          {lastEliminated && (
+            <div className="audience-workflow-eliminated">
+              <Avatar participant={lastEliminated} size="small" eliminated />
+              <div>
+                <span>ELIMINADO</span>
+                <b>{lastEliminated.name}</b>
+                <small>
+                  {shadowGameState.audienceModel.mode === "clustered" && latestEliminationVote
+                    ? `${Math.round((latestEliminationVote.shares[lastEliminated.id] ?? 0) * 1000) / 10}% dos votos`
+                    : "Resultado oficial encerrado"}
+                </small>
+              </div>
+            </div>
+          )}
+          <footer className="audience-workflow-footer">
+            <p>{currentWeekAudienceBroadcasts.length} transmissões medidas nesta semana.</p>
+            <button
+              className="button button-primary"
+              onClick={finalists ? () => startEdit("editFinal") : nextWeek}
+              type="button"
+            >
+              {finalists ? "Preparar a grande final" : `Começar semana ${week + 1}`}
+            </button>
+          </footer>
+        </section>
+      );
+    }
+
+    return null;
+  }
+
   function renderAppContent() {
     if (view === "mail") return renderMail();
     if (view === "feed") return renderFeed();
     if (view === "challenge") return renderChallenge();
-    if (view === "audience") return <AudienceReport state={shadowGameState} />;
+    if (view === "audience") {
+      return (
+        <div className="audience-app-content">
+          {renderAudienceWorkflow()}
+          <AudienceReport state={shadowGameState} />
+        </div>
+      );
+    }
     return renderEditor();
   }
 
@@ -2471,7 +2615,9 @@ export default function Home() {
     );
     const currentCheckpoint = revealedCheckpoints.at(-1) ?? null;
     const previousCheckpoint = revealedCheckpoints.at(-2) ?? null;
-    const liveAudience = currentCheckpoint?.rating ?? storedResult?.forecast.expected ?? predictedAudience;
+    const liveAudience = currentCheckpoint?.rating
+      ?? storedResult?.forecast.expected
+      ?? shadowGameState.audienceModel.market.networkTargetPoints;
     const revealedPeak = revealedCheckpoints.reduce(
       (peak, checkpoint) => Math.max(peak, checkpoint.rating),
       liveAudience,
@@ -2512,7 +2658,12 @@ export default function Home() {
             className="live-chart"
             aria-label={`Audiência atual: ${liveAudience.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} pontos`}
           >
-            {(checkpoints.length > 0 ? checkpoints : [{ segmentId: "forecast", rating: predictedAudience, elapsedSeconds: 0, label: "Previsão" }]).map((checkpoint) => {
+            {(checkpoints.length > 0 ? checkpoints : [{
+              segmentId: "awaiting-measurement",
+              rating: shadowGameState.audienceModel.market.networkTargetPoints,
+              elapsedSeconds: 0,
+              label: "Aguardando medição",
+            }]).map((checkpoint) => {
               const reached = revealedCheckpoints.some((revealed) => revealed.segmentId === checkpoint.segmentId);
               const height = reached ? Math.max(8, Math.min(100, checkpoint.rating / chartCeiling * 100)) : 8;
               return (
@@ -2542,181 +2693,6 @@ export default function Home() {
           <p className="transmission-status">{liveProgress < 100 ? "TRANSMISSÃO EM ANDAMENTO" : "ENCERRANDO SINAL…"}</p>
         </section>
         <div className="broadcast-noise" aria-hidden="true" />
-      </main>
-    );
-  }
-
-  if (phase === "summaryPremiere" || phase === "summaryChallenge") {
-    const premiere = phase === "summaryPremiere";
-    const summaryResult = latestAudienceResult;
-    const metTarget = (summaryResult?.averageRating ?? 0)
-      >= shadowGameState.audienceModel.market.networkTargetPoints;
-    return (
-      <main className={`result-screen theme-${theme}`}>
-        <ThemeSwitch onToggle={toggleTheme} theme={theme} />
-        <RestartGameControl onConfirm={restartSeason} />
-        <div className="result-window">
-          <span className="eyebrow">RELATÓRIO DE EXIBIÇÃO · EPISÓDIO {String(week * 3 - 2).padStart(2, "0")}</span>
-          <h1>
-            {premiere
-              ? metTarget ? "Uma estreia acima da meta." : "A estreia encontrou seu público."
-              : `A liderança da semana ${week} está definida.`}
-          </h1>
-          <p>
-            {premiere
-              ? `O primeiro episódio apresentou o elenco, construiu uma rivalidade e terminou com ${leader?.name ?? "um participante"} na liderança.`
-              : `${leader?.name ?? "Um participante"} venceu a prova${challengeRunnerUp ? `, com ${challengeRunnerUp.name} logo atrás` : ""}. A casa já começou a reagir ao novo poder.`}
-          </p>
-          <div className="summary-metrics">
-            <div>
-              <span>AUDIÊNCIA MÉDIA</span>
-              <b>{(summaryResult?.averageRating ?? predictedAudience).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>
-              <small>meta {shadowGameState.audienceModel.market.networkTargetPoints.toLocaleString("pt-BR", { minimumFractionDigits: 1 })}</small>
-            </div>
-            <div>
-              <span>PICO</span>
-              <b>{(summaryResult?.peakRating ?? predictedAudience).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>
-              <small>maior checkpoint medido</small>
-            </div>
-            <div>
-              <span>CONCLUSÃO</span>
-              <b>{((summaryResult?.completionRate ?? 0) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</b>
-              <small>entre quem iniciou ao vivo</small>
-            </div>
-          </div>
-          <div className="leader-callout">
-            {leader && <Avatar participant={leader} size="small" />}
-            <div><span>{premiere ? "PRIMEIRO LÍDER" : `LÍDER · SEMANA ${String(week).padStart(2, "0")}`}</span><b>{leader?.name}</b></div>
-          </div>
-          <button
-            className="button button-primary"
-            onClick={() => {
-              dispatchGame({ type: "START_PARTY" });
-              setPhase("feedParty");
-              setView("feed");
-              setWindowOpen(true);
-            }}
-            type="button"
-          >
-            Voltar ao computador
-          </button>
-        </div>
-      </main>
-    );
-  }
-
-  if (phase === "audienceVote" || phase === "winnerVote") {
-    const choices = phase === "winnerVote"
-      ? activeParticipants
-      : participants.filter((participant) => nominees.includes(participant.id));
-    const resolvedVote = pendingAudienceVote?.kind === (phase === "winnerVote" ? "final" : "elimination")
-      ? pendingAudienceVote
-      : null;
-    const authoritativeChoiceId = shadowGameState.audienceModel.mode === "clustered"
-      ? resolvedVote?.selectedParticipantId ?? null
-      : phase === "winnerVote"
-        ? legacyFinalChoice
-        : audiencePick ?? legacyEliminationChoice;
-    const voteReady = Boolean(authoritativeChoiceId);
-    const isShadowProjection = shadowGameState.audienceModel.mode === "shadow";
-    return (
-      <main className={`vote-screen theme-${theme}`}>
-        <ThemeSwitch onToggle={toggleTheme} theme={theme} />
-        <RestartGameControl onConfirm={restartSeason} />
-        <div className="vote-brand"><span>CASA</span><b>VIGIADA</b><small>VOTAÇÃO DO PÚBLICO</small></div>
-        <section className="vote-box">
-          <span className="eyebrow">{phase === "winnerVote" ? "GRANDE FINAL" : `SEMANA ${String(week).padStart(2, "0")} · VOTAÇÃO ENCERRADA`}</span>
-          <h1>{voteReady ? "O resultado está fechado." : "Consolidando o painel…"}</h1>
-          <p>
-            {isShadowProjection
-              ? "O resultado oficial usa o modelo de compatibilidade; a projeção das 16 coortes fica disponível em Pesquisa & Audiência para calibração."
-              : resolvedVote
-              ? phase === "winnerVote"
-                ? "Os votos de todas as coortes foram consolidados. O resultado está pronto para ser revelado."
-                : "Interesses, fandoms e rejeições das 16 coortes definiram o resultado."
-              : voteReady
-                ? "O resultado de compatibilidade foi fechado sem seleção manual da produção."
-                : "A central está fechando a amostra ficcional de audiência."}
-          </p>
-          <div className={`vote-cards vote-${choices.length}`}>
-            {choices.map((participant) => {
-              const selected = authoritativeChoiceId === participant.id;
-              return (
-              <button
-                aria-current={selected ? "true" : undefined}
-                className={selected ? "is-selected" : ""}
-                disabled
-                key={participant.id}
-                type="button"
-              >
-                <Avatar participant={participant} size="large" />
-                <span>{participant.city}</span>
-                <b>{participant.name}</b>
-                <small>{participant.occupation}</small>
-                <small>
-                  {resolvedVote
-                    ? `${Math.round((resolvedVote.shares[participant.id] ?? 0) * 1000) / 10}% na projeção das coortes`
-                    : "Resultado de compatibilidade"}
-                </small>
-                <i>{selected ? phase === "winnerVote" ? "VENCEDOR OFICIAL ✓" : "RESULTADO OFICIAL ✓" : "AMOSTRA CONSOLIDADA"}</i>
-              </button>
-            );})}
-          </div>
-          <button
-            className="button button-primary vote-confirm"
-            disabled={!voteReady}
-            onClick={phase === "winnerVote" ? voteWinner : confirmAudienceElimination}
-            type="button"
-          >
-            {phase === "winnerVote" ? "Revelar vencedor" : "Preparar programa de eliminação"}
-          </button>
-        </section>
-      </main>
-    );
-  }
-
-  if (phase === "weekSummary") {
-    const finalists = activeParticipants.length === 3;
-    return (
-      <main className={`result-screen week-result theme-${theme}`}>
-        <ThemeSwitch onToggle={toggleTheme} theme={theme} />
-        <RestartGameControl onConfirm={restartSeason} />
-        <div className="result-window">
-          <span className="eyebrow">ARQUIVO SEMANAL · SEMANA {String(week).padStart(2, "0")}</span>
-          <h1>{finalists ? "Temos os três finalistas." : `Semana ${week} encerrada.`}</h1>
-          {lastEliminated && (
-            <div className="eliminated-callout">
-              <Avatar participant={lastEliminated} size="large" eliminated />
-              <div>
-                <span>
-                  ELIMINADO COM{" "}
-                  {shadowGameState.audienceModel.mode === "clustered" && latestEliminationVote
-                    ? Math.round((latestEliminationVote.shares[lastEliminated.id] ?? 0) * 1000) / 10
-                    : "—"}% DOS VOTOS
-                </span>
-                <b>{lastEliminated.name}</b>
-                <p>“{lastEliminated.quote}”</p>
-              </div>
-            </div>
-          )}
-          <div className="summary-metrics">
-            <div><span>EPISÓDIOS</span><b>{String(currentWeekAudienceBroadcasts.length).padStart(2, "0")}</b><small>medidos nesta semana</small></div>
-            <div>
-              <span>MÉDIA</span>
-              <b>{currentWeekAverageRating.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>
-              <small>resultado persistido da semana</small>
-            </div>
-            <div><span>NA CASA</span><b>{activeParticipants.length}</b><small>participantes ativos</small></div>
-          </div>
-          <div className="remaining-strip">
-            {activeParticipants.map((participant) => (
-              <div key={participant.id}><Avatar participant={participant} size="small" /><span>{participant.name.split(" ")[0]}</span></div>
-            ))}
-          </div>
-          <button className="button button-primary" onClick={finalists ? () => startEdit("editFinal") : nextWeek} type="button">
-            {finalists ? "Preparar a grande final" : `Começar semana ${week + 1}`}
-          </button>
-        </div>
       </main>
     );
   }

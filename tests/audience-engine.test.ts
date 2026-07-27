@@ -5,6 +5,7 @@ import {
   closeAudienceVote,
   collectAudienceResultErrors,
   collectAudienceStateErrors,
+  collectBroadcastEpisodeErrors,
   consumePendingAudienceVote,
   selectClusterAudienceForecast,
   selectParticipantAudienceAggregates,
@@ -219,6 +220,30 @@ test("same pre-state, seed, episode id, and edit produce identical complete resu
   assert.equal(left.rng.counter - rng.counter, 18, "one episode, 16 cohort, and one measurement draw");
   assert.equal(left.result.checkpoints.length, broadcast.segments.length);
   assert.equal(left.result.clusterResults.length, 16);
+});
+
+test("elimination reveal metadata remains valid only in elimination episodes", () => {
+  const revealSegment: ContentSegment = {
+    ...contentSegment("locked-elimination-reveal", {
+      participantIds: [firstParticipantId, secondParticipantId],
+      perspectiveIds: [firstParticipantId, secondParticipantId],
+    }),
+    revealsEliminatedParticipantId: firstParticipantId,
+  };
+  const eliminationErrors = collectBroadcastEpisodeErrors(
+    episode("elimination-reveal", [revealSegment], { kind: "elimination" }),
+    participantIds,
+  );
+  const finalErrors = collectBroadcastEpisodeErrors(
+    episode("misclassified-reveal", [revealSegment], { kind: "final" }),
+    participantIds,
+  );
+
+  assert.equal(
+    eliminationErrors.some((error) => error.includes("outside an elimination episode")),
+    false,
+  );
+  assert.ok(finalErrors.some((error) => error.includes("outside an elimination episode")));
 });
 
 test("viewer pools, reach, favorites, shocks, and aggregate reports stay conserved and bounded", () => {
