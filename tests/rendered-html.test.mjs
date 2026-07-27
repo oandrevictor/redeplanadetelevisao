@@ -242,7 +242,7 @@ test("Edição uses the approved timeline, bank and persistent cut-state workspa
   assert.match(css, /grid-auto-rows:\s*148px/);
   assert.match(css, /\.computer-shell \.important-card-footer > button[\s\S]*?position:\s*static/);
   assert.match(css, /\.computer-shell \.important-card-footer > button[\s\S]*?background:\s*var\(--chrome\)/);
-  assert.match(css, /Consolidated Edição layout[\s\S]*?grid-template-rows:\s*175px minmax\(0, 1fr\)/);
+  assert.match(css, /Consolidated Edição layout[\s\S]*?grid-template-rows:\s*220px minmax\(0, 1fr\)/);
   assert.equal((css.match(/Consolidated Edição layout/g) ?? []).length, 1);
   assert.doesNotMatch(css, /Final desktop proportions|Final consistency pass|Mockup-alignment corrections/);
   assert.match(css, /\.computer-shell \.timeline-drop-zone[\s\S]*?flex:\s*1 1 80px[\s\S]*?min-width:\s*72px/);
@@ -254,6 +254,9 @@ test("Edição uses the approved timeline, bank and persistent cut-state workspa
   assert.doesNotMatch(css, /\.important-footage-feature/);
   assert.match(css, /\.editor-transmit-area \.button:disabled[\s\S]*?cursor:\s*not-allowed/);
   assert.match(css, /\.computer-shell \.duration-current-label\.is-high[\s\S]*?translateX\(-100%\)/);
+  assert.match(css, /\.computer-shell \.timeline-track \.timeline-event\s*\{[\s\S]*?grid-template-rows:\s*auto minmax\(0, 1fr\) auto auto auto;[\s\S]*?overflow:\s*hidden/);
+  assert.match(css, /\.computer-shell \.timeline-track \.timeline-event > \.approach-editor label\s*\{[\s\S]*?grid-template-columns:\s*38px minmax\(0, 1fr\)/);
+  assert.match(css, /\.computer-shell \.timeline-track \.timeline-event > \.approach-editor select\s*\{[\s\S]*?width:\s*100%;[\s\S]*?min-width:\s*0;[\s\S]*?height:\s*20px;[\s\S]*?font:\s*8px\/1 Tahoma/);
   assert.match(css, /\.computer-shell \.app-edit \.window-content \{\s*overflow:\s*hidden/);
   assert.match(css, /\.computer-shell \.event-bank \.event-grid[\s\S]*?overflow-y:\s*auto/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.computer-shell \.editor-workspace[\s\S]*?flex-direction:\s*column/);

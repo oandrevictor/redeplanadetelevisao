@@ -7449,6 +7449,64 @@ select:focus-visible {
   text-decoration: line-through;
 }
 
+/* Timeline event controls are deliberately denser than their event-bank version. */
+
+.computer-shell .timeline-track .timeline-event {
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  overflow: hidden;
+}
+
+.computer-shell .timeline-track .timeline-event > .approach-editor {
+  min-width: 0;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 3px 4px 4px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+}
+
+.computer-shell .timeline-track .timeline-event > .approach-editor legend {
+  max-width: 100%;
+  padding: 0 2px;
+  overflow: hidden;
+  font: 700 6px/1 "Courier New", monospace;
+  letter-spacing: .04em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.computer-shell .timeline-track .timeline-event > .approach-editor label {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.computer-shell .timeline-track .timeline-event > .approach-editor label > span {
+  overflow: hidden;
+  color: var(--ui-muted);
+  font: 700 7px/1 "Courier New", monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.computer-shell .timeline-track .timeline-event > .approach-editor select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: 20px;
+  padding: 0 3px;
+  border: 1px solid var(--chrome-dark);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--ui-text);
+  box-shadow: inset 1px 1px 0 var(--chrome-shadow), inset -1px -1px 0 var(--chrome-hi);
+  font: 8px/1 Tahoma, Arial, sans-serif;
+}
+
 @media (min-width: 901px) {
   .computer-shell .editor-panel {
     grid-template-columns: minmax(0, 81fr) minmax(200px, 19fr);
@@ -7578,7 +7636,7 @@ select:focus-visible {
   .computer-shell .editor-main-column {
     grid-column: 1;
     grid-row: 2;
-    grid-template-rows: 175px minmax(0, 1fr);
+    grid-template-rows: 220px minmax(0, 1fr);
     gap: 7px;
   }
 
@@ -7664,6 +7722,10 @@ select:focus-visible {
     padding: 6px;
   }
 
+  .computer-shell .timeline-track .timeline-event {
+    grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  }
+
   .computer-shell .timeline-track .timeline-item:not(.timeline-ad) > * {
     grid-column: 1;
   }
@@ -7682,6 +7744,10 @@ select:focus-visible {
     font: 700 11px/1.18 Tahoma, Arial, sans-serif;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
+  }
+
+  .computer-shell .timeline-track .timeline-event h3 {
+    -webkit-line-clamp: 2;
   }
 
   .computer-shell .timeline-track .timeline-ad {
@@ -8061,6 +8127,10 @@ select:focus-visible {
 }
 
 @media (max-width: 900px) {
+  .computer-shell .timeline-section {
+    min-height: 220px;
+  }
+
   .computer-shell .timeline-drop-zone {
     min-width: 72px;
   }
