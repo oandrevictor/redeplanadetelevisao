@@ -14,6 +14,39 @@ type AnalyzeImportantEventEditInput = {
   televisedOrder: readonly string[];
 };
 
+export const IMPORTANT_EVENT_MAX_DURATION_SECONDS = 180;
+export const IMPORTANT_EVENT_MIN_MOMENTS = 2;
+
+export type ImportantEventVersionValidation = {
+  canSaveToTimeline: boolean;
+  durationState: "available" | "limit" | "exceeded";
+  remainingSeconds: number;
+  exceededSeconds: number;
+  reason: string;
+};
+
+export function validateImportantEventVersion(
+  selectedMomentCount: number,
+  durationSeconds: number,
+): ImportantEventVersionValidation {
+  const remainingSeconds = Math.max(0, IMPORTANT_EVENT_MAX_DURATION_SECONDS - durationSeconds);
+  const exceededSeconds = Math.max(0, durationSeconds - IMPORTANT_EVENT_MAX_DURATION_SECONDS);
+  const hasEnoughMoments = selectedMomentCount >= IMPORTANT_EVENT_MIN_MOMENTS;
+  const fitsDuration = durationSeconds <= IMPORTANT_EVENT_MAX_DURATION_SECONDS;
+
+  return {
+    canSaveToTimeline: hasEnoughMoments && fitsDuration,
+    durationState: exceededSeconds > 0 ? "exceeded" : remainingSeconds === 0 ? "limit" : "available",
+    remainingSeconds,
+    exceededSeconds,
+    reason: !hasEnoughMoments
+      ? `Inclua pelo menos ${IMPORTANT_EVENT_MIN_MOMENTS} momentos para salvar na timeline.`
+      : !fitsDuration
+        ? `Reduza o corte em ${Math.floor(exceededSeconds / 60)}:${String(exceededSeconds % 60).padStart(2, "0")} para salvar na timeline.`
+        : "",
+  };
+}
+
 const portrayalValues: Record<ImportantEventPortrayal, number> = {
   justified: 2,
   attacked: 1.5,

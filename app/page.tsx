@@ -21,6 +21,7 @@ import { GameInspector } from "./game-inspector";
 import { useGameEngine } from "./use-game-engine";
 import {
   EDITOR_DURATION_CONFIG,
+  buildEditorialAlerts,
   classifyDuration,
   classifyFocus,
   classifyRhythm,
@@ -39,7 +40,12 @@ import type {
   ImportantEventBeatRole,
   ImportantEventEdit,
 } from "./event-models";
-import { analyzeImportantEventEdit, importantEventConstructionLabels } from "./important-event-analysis";
+import {
+  IMPORTANT_EVENT_MAX_DURATION_SECONDS,
+  analyzeImportantEventEdit,
+  importantEventConstructionLabels,
+  validateImportantEventVersion,
+} from "./important-event-analysis";
 import { generateWeekEvents, WEEK_ONE_SEED } from "./important-event-generation";
 type AppView = "mail" | "feed" | "challenge" | "edit";
 type Theme = "light" | "dark";
@@ -613,19 +619,22 @@ function formatClockDuration(totalSeconds: number) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-function orderedImportantBeats(edit: ImportantEventEdit) {
-  const selected = edit.televisedOrder
-    .map((id) => weekOneImportantEventBeats.find((beat) => beat.id === id))
-    .filter((beat): beat is ImportantEventBeat => Boolean(beat));
-  const excluded = weekOneImportantEventBeats.filter((beat) => edit.excludedBeatIds.includes(beat.id));
-  return [...selected, ...excluded];
-}
-
 function importantMainFocusLabel(participantIds: readonly string[]) {
   if (participantIds.length === 0) return "Sem foco claro";
   if (participantIds.length === 1) return participantNames(participantIds);
   if (participantIds.length === 2) return `Dividido entre ${participantNames(participantIds)}`;
   return `Foco no conjunto: ${participantNames(participantIds)}`;
+}
+
+function importantAnalysisSignature(edit: ImportantEventEdit) {
+  return JSON.stringify({
+    focus: edit.mainFocusParticipantIds,
+    favored: edit.favoredParticipantIds,
+    harmed: edit.harmedParticipantIds,
+    construction: edit.detectedEditorialConstruction,
+    missingContext: edit.missingContextDescription,
+    summary: edit.versionSummary,
+  });
 }
 
 const FEED_REFRESH_MS = 3500;
@@ -771,6 +780,8 @@ export default function Home() {
   const [importantEventEdits, setImportantEventEdits] = useState<Record<string, ImportantEventEdit>>({});
   const [editingImportantChainId, setEditingImportantChainId] = useState<string | null>(null);
   const [importantEditError, setImportantEditError] = useState("");
+  const [draggedImportantBeatId, setDraggedImportantBeatId] = useState<string | null>(null);
+  const [importantReadingChange, setImportantReadingChange] = useState("");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("Todos");
   const [sort, setSort] = useState("gravacao");
@@ -784,6 +795,7 @@ export default function Home() {
   const [winnerId, setWinnerId] = useState<string | null>(null);
   const [soundOn, setSoundOn] = useState(true);
   const uiSaveReady = useRef(false);
+  const importantReadingChangeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const raw = window.localStorage.getItem(UI_SAVE_KEY);
@@ -887,6 +899,10 @@ export default function Home() {
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [editingImportantChainId, openImportantChainId]);
 
+  useEffect(() => () => {
+    if (importantReadingChangeTimer.current) clearTimeout(importantReadingChangeTimer.current);
+  }, []);
+
   function toggleTheme() {
     setTheme((current) => {
       const next = current === "light" ? "dark" : "light";
@@ -924,7 +940,20 @@ export default function Home() {
   const editingImportantEdit = editingImportantChain
     ? importantEventEdits[editingImportantChain.id] ?? null
     : null;
-  const editingImportantBeats = editingImportantEdit ? orderedImportantBeats(editingImportantEdit) : [];
+  const includedImportantBeats = editingImportantEdit
+    ? editingImportantEdit.televisedOrder
+      .map((id) => weekOneImportantEventBeats.find((beat) => beat.id === id))
+      .filter((beat): beat is ImportantEventBeat => Boolean(beat))
+    : [];
+  const excludedImportantBeats = editingImportantEdit
+    ? weekOneImportantEventBeats.filter((beat) => !editingImportantEdit.selectedBeatIds.includes(beat.id))
+    : [];
+  const importantVersionValidation = editingImportantEdit
+    ? validateImportantEventVersion(
+      editingImportantEdit.selectedBeatIds.length,
+      editingImportantEdit.finalDurationSeconds,
+    )
+    : null;
   const editingImportantParticipants = editingImportantChain
     ? editingImportantChain.participantIds
       .map((id) => participants.find((participant) => participant.id === id))
@@ -1017,6 +1046,7 @@ export default function Home() {
         .filter((beat) => item.edit.selectedBeatIds.includes(beat.id))
         .flatMap((beat) => beat.participantIds))]),
   (id) => participants.find((participant) => participant.id === id)?.name.split(" ")[0] ?? id);
+  const editorialAlerts = buildEditorialAlerts(durationReading, focusReading, varietyReading, rhythmReading);
   const plannedCuts = useMemo(() => {
     const knownEventIds = new Set(shadowGameState.house.eventHistory.map((event) => event.id));
     return timeline
@@ -1094,28 +1124,41 @@ export default function Home() {
       };
     });
     setImportantEditError("");
+    setImportantReadingChange("");
     setEditingImportantChainId(chainId);
+  }
+
+  function announceImportantReadingChange(message: string) {
+    if (importantReadingChangeTimer.current) clearTimeout(importantReadingChangeTimer.current);
+    setImportantReadingChange(message);
+    importantReadingChangeTimer.current = setTimeout(() => {
+      setImportantReadingChange("");
+      importantReadingChangeTimer.current = null;
+    }, 2000);
   }
 
   function updateImportantEventEdit(
     chainId: string,
     update: (current: ImportantEventEdit) => ImportantEventEdit,
+    changeLabel?: string,
   ) {
-    setImportantEventEdits((current) => {
-      const existing = current[chainId] ?? createDefaultImportantEdit(chainId);
-      const next = withAutomaticImportantAnalysis(update(existing));
-      return {
-        ...current,
-        [chainId]: {
-          ...next,
-          status: "editing",
-        },
-      };
-    });
+    const existing = withAutomaticImportantAnalysis(
+      importantEventEdits[chainId] ?? createDefaultImportantEdit(chainId),
+    );
+    const next = withAutomaticImportantAnalysis(update(existing));
+    setImportantEventEdits((current) => ({
+      ...current,
+      [chainId]: { ...next, status: "editing" },
+    }));
+    if (changeLabel && importantAnalysisSignature(existing) !== importantAnalysisSignature(next)) {
+      announceImportantReadingChange(`${changeLabel} ${next.versionSummary}`);
+    }
     setImportantEditError("");
   }
 
   function toggleImportantBeat(chainId: string, beatId: string) {
+    const beat = weekOneImportantEventBeats.find((item) => item.id === beatId);
+    const wasIncluded = importantEventEdits[chainId]?.selectedBeatIds.includes(beatId) ?? true;
     updateImportantEventEdit(chainId, (current) => {
       const included = current.selectedBeatIds.includes(beatId);
       const selectedBeatIds = included
@@ -1128,7 +1171,7 @@ export default function Home() {
         .map((beat) => beat.id)
         .filter((id) => !selectedBeatIds.includes(id));
       return { ...current, selectedBeatIds, excludedBeatIds, televisedOrder };
-    });
+    }, beat ? `${wasIncluded ? "Retirado" : "Incluído"}: “${beat.title}”.` : "A seleção mudou.");
   }
 
   function restartSeason() {
@@ -1145,13 +1188,35 @@ export default function Home() {
       const televisedOrder = [...current.televisedOrder];
       [televisedOrder[index], televisedOrder[nextIndex]] = [televisedOrder[nextIndex], televisedOrder[index]];
       return { ...current, televisedOrder };
-    });
+    }, "A ordem exibida mudou.");
+  }
+
+  function reorderImportantBeat(chainId: string, sourceBeatId: string, targetBeatId: string) {
+    if (sourceBeatId === targetBeatId) return;
+    updateImportantEventEdit(chainId, (current) => {
+      const televisedOrder = current.televisedOrder.filter((id) => id !== sourceBeatId);
+      const targetIndex = televisedOrder.indexOf(targetBeatId);
+      if (targetIndex < 0) return current;
+      televisedOrder.splice(targetIndex, 0, sourceBeatId);
+      return { ...current, televisedOrder };
+    }, "A ordem exibida mudou.");
+  }
+
+  function closeImportantDraft() {
+    setDraggedImportantBeatId(null);
+    setImportantReadingChange("");
+    setImportantEditError("");
+    setEditingImportantChainId(null);
   }
 
   function confirmImportantEventEdit() {
     if (!editingImportantChain || !editingImportantEdit) return;
-    if (editingImportantEdit.selectedBeatIds.length === 0) {
-      setImportantEditError("Inclua pelo menos um momento antes de salvar a versão.");
+    const validation = validateImportantEventVersion(
+      editingImportantEdit.selectedBeatIds.length,
+      editingImportantEdit.finalDurationSeconds,
+    );
+    if (!validation.canSaveToTimeline) {
+      setImportantEditError(validation.reason);
       return;
     }
 
@@ -1403,9 +1468,7 @@ export default function Home() {
       if (missingRequiredEvents.length > 0) {
         return `Ainda falta incluir ${missingRequiredEvents.length === 1 ? "o obrigatório" : "os obrigatórios"}: ${missingRequiredEvents.map((event) => event.title).join(", ")}.`;
       }
-      if (durationReading.label === "Curta") return "O corte ainda está curto. Inclua mais acontecimentos se quiser chegar à faixa recomendada.";
-      if (durationReading.label === "Longa") return "O corte está longo. Você pode enxugar acontecimentos, mas isso não impede a transmissão.";
-      if (focusReading.label.startsWith("Concentrado")) return `${focusReading.label}. Vale conferir se esse é o foco editorial desejado.`;
+      if (editorialAlerts.length > 0) return editorialAlerts.join(" ");
       return "O corte está dentro da faixa recomendada e sem pendências obrigatórias.";
     }
     if (phase === "email" || phase === "feedIntro" && feedCount < introFeed.length) {
@@ -1785,26 +1848,35 @@ export default function Home() {
     const durationMarkerPercent = Math.max(0, Math.min(100,
       (timelineDurationMinutes - EDITOR_DURATION_CONFIG.minMinutes)
       / (EDITOR_DURATION_CONFIG.maxMinutes - EDITOR_DURATION_CONFIG.minMinutes) * 100));
-    const editorialNote = durationReading.label === "Longa"
-      ? "Episódio longo: a duração acima da faixa pode cansar a audiência."
-      : durationReading.label === "Curta"
-        ? "Episódio curto: a duração abaixo da faixa pode afetar a recepção do público."
-        : focusReading.label.startsWith("Concentrado")
-          ? `${focusReading.label}. Confira se esse é o foco desejado.`
-          : "A montagem está equilibrada para transmissão.";
-    const dropZone = (index: number) => (
+    const editorialMessages = editorialAlerts.length > 0
+      ? editorialAlerts
+      : ["A montagem está equilibrada para transmissão."];
+    const emptyProgramZones = new Set<number>();
+    let currentProgramZone = 0;
+    let currentZoneHasEvent = false;
+    for (const item of timeline) {
+      if (item.kind === "ad") {
+        if (!currentZoneHasEvent) emptyProgramZones.add(currentProgramZone);
+        currentProgramZone += 1;
+        currentZoneHasEvent = false;
+      } else {
+        currentZoneHasEvent = true;
+      }
+    }
+    if (!currentZoneHasEvent) emptyProgramZones.add(currentProgramZone);
+    const dropZone = (blockIndex: number, targetIndex: number) => (
       <button
-        aria-label={`Posição ${index + 1}: soltar acontecimento aqui`}
+        aria-label={`Bloco ${blockIndex + 1}: soltar acontecimento aqui`}
         className={`timeline-drop-zone${dragged ? " is-active" : ""}`}
-        key={`drop-${index}`}
+        key={`drop-block-${blockIndex}`}
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => {
           event.stopPropagation();
-          dropOnTimeline(index);
+          dropOnTimeline(targetIndex);
         }}
         type="button"
       >
-        <b>BLOCO {index + 1}</b>
+        <b>BLOCO {blockIndex + 1}</b>
         <span aria-hidden="true">+</span>
         <small>SOLTE AQUI</small>
       </button>
@@ -1846,9 +1918,10 @@ export default function Home() {
               </div>
               <div className="timeline-scroll">
                 <div className={`timeline-track${eventCount > 0 ? " has-editorial-items" : ""}`}>
-                  {dropZone(0)}
+                  {emptyProgramZones.has(0) && dropZone(0, 0)}
                   {timeline.flatMap((item, index) => {
                     const isDragging = dragged?.source === "timeline" && dragged.id === item.id;
+                    const followingBlockIndex = timeline.slice(0, index + 1).filter((candidate) => candidate.kind === "ad").length;
                     return [
                       <article
                         aria-grabbed={isDragging}
@@ -1887,7 +1960,9 @@ export default function Home() {
                           {item.kind !== "ad" && <button aria-label={`Remover ${item.title}`} onClick={() => removeEvent(item.id)} type="button">×</button>}
                         </div>
                       </article>,
-                      dropZone(index + 1),
+                      item.kind === "ad" && emptyProgramZones.has(followingBlockIndex)
+                        ? dropZone(followingBlockIndex, index + 1)
+                        : null,
                     ];
                   })}
                 </div>
@@ -1978,7 +2053,9 @@ export default function Home() {
                 <div><dt><i className={`reading-dot is-${varietyReading.state}`} />Variedade</dt><dd>{varietyReading.label}</dd></div>
                 <div><dt><i className={`reading-dot is-${durationReading.state}`} />Duração</dt><dd>{durationReading.label}</dd></div>
               </dl>
-              <p className="editorial-note"><span aria-hidden="true">▧</span>{editorialNote}</p>
+              <div className="editorial-notes">
+                {editorialMessages.map((message) => <p className="editorial-note" key={message}><span aria-hidden="true">▧</span>{message}</p>)}
+              </div>
             </section>
             <section className="cut-counts"><div><span>▦</span><b>{eventCount} acontecimentos</b></div><div><span>◷</span><b>{timeline.filter((item) => item.kind === "ad").length} intervalos</b></div></section>
             <div className="editor-transmit-area">
@@ -2396,25 +2473,74 @@ export default function Home() {
                 <span aria-hidden="true">!</span>
                 <b>Editor interno de acontecimento</b>
               </div>
-              <button aria-label="Fechar editor interno" onClick={() => setEditingImportantChainId(null)} type="button">×</button>
+              <button aria-label="Salvar rascunho e fechar editor interno" onClick={closeImportantDraft} type="button">×</button>
             </header>
 
             <div className="important-internal-body">
-              <div className="important-editor-story">
-                <div>
-                  <span className="important-event-badge"><b aria-hidden="true">!</b> ACONTECIMENTO IMPORTANTE</span>
-                  <h2>{editingImportantChain.title}</h2>
-                  <p>{importantEventSummary(true)}</p>
+              <section className="important-editor-overview">
+                <div className="important-editor-story">
+                  <div>
+                    <span className="important-event-badge"><b aria-hidden="true">!</b> ACONTECIMENTO IMPORTANTE</span>
+                    <h2>{editingImportantChain.title}</h2>
+                    <p>{importantEventSummary(true)}</p>
+                  </div>
+                  <div className="important-editor-story-cast" aria-label="Participantes do acontecimento">
+                    {editingImportantParticipants.map((participant) => (
+                      <div key={participant.id}>
+                        <Avatar participant={participant} size="small" />
+                        <span>{participant.name}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="important-editor-story-cast">
-                  {editingImportantParticipants.map((participant) => (
-                    <div key={participant.id}>
-                      <Avatar participant={participant} size="small" />
-                      <span>{participant.name}</span>
-                    </div>
+                <div className={`important-duration-panel is-${importantVersionValidation?.durationState ?? "available"}`}>
+                  <div>
+                    <span>DURAÇÃO DO CORTE</span>
+                    <b>{formatClockDuration(editingImportantEdit.finalDurationSeconds)}</b>
+                  </div>
+                  <div className="important-duration-limit"><span>LIMITE RÍGIDO</span><b>03:00</b></div>
+                  <div className="important-duration-meter" aria-label={`Duração atual ${formatClockDuration(editingImportantEdit.finalDurationSeconds)} de 03:00`}>
+                    <i style={{ width: `${Math.min(100, editingImportantEdit.finalDurationSeconds / IMPORTANT_EVENT_MAX_DURATION_SECONDS * 100)}%` }} />
+                  </div>
+                  <p>
+                    {importantVersionValidation?.durationState === "exceeded"
+                      ? `Excedido em ${formatClockDuration(importantVersionValidation.exceededSeconds)}`
+                      : importantVersionValidation?.durationState === "limit"
+                        ? "No limite permitido"
+                        : `${formatClockDuration(importantVersionValidation?.remainingSeconds ?? 0)} livres`}
+                    <span>mínimo de 2 momentos</span>
+                  </p>
+                </div>
+              </section>
+
+              <section className="important-version-strip" aria-labelledby="important-version-title">
+                <div className="important-version-heading">
+                  <div><small>VERSÃO EXIBIDA</small><h3 id="important-version-title">Ordem que irá ao ar</h3></div>
+                  <span>Arraste os momentos para reorganizar</span>
+                </div>
+                <ol className="important-version-track">
+                  {includedImportantBeats.length === 0 && <li className="important-version-empty">Inclua momentos para montar a versão exibida.</li>}
+                  {includedImportantBeats.map((beat, index) => (
+                    <li
+                      className={draggedImportantBeatId === beat.id ? "is-dragging" : ""}
+                      draggable
+                      key={beat.id}
+                      onDragEnd={() => setDraggedImportantBeatId(null)}
+                      onDragOver={(event) => event.preventDefault()}
+                      onDragStart={() => setDraggedImportantBeatId(beat.id)}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        if (draggedImportantBeatId) reorderImportantBeat(editingImportantChain.id, draggedImportantBeatId, beat.id);
+                        setDraggedImportantBeatId(null);
+                      }}
+                    >
+                      <b>{String(index + 1).padStart(2, "0")}</b>
+                      <div><span>{importantEventRoleLabels[beat.role]}</span><strong>{beat.title}</strong></div>
+                      <small>{formatClockDuration(importantBeatDurationSeconds[beat.role])}</small>
+                    </li>
                   ))}
-                </div>
-              </div>
+                </ol>
+              </section>
 
               <div className="important-editor-layout">
                 <section className="important-moment-editor" aria-labelledby="moment-editor-title">
@@ -2422,59 +2548,93 @@ export default function Home() {
                     <div><small>MONTAGEM INTERNA</small><h3 id="moment-editor-title">Momentos do acontecimento</h3></div>
                     <span>{editingImportantEdit.selectedBeatIds.length} de {weekOneImportantEventBeats.length} incluídos</span>
                   </div>
-                  <p className="important-editor-instruction">Inclua, exclua e reorganize os momentos. A ordem original da casa permanece preservada.</p>
-                  <ol className="important-edit-beat-list">
-                    {editingImportantBeats.map((beat) => {
-                      const included = editingImportantEdit.selectedBeatIds.includes(beat.id);
-                      const televisedIndex = editingImportantEdit.televisedOrder.indexOf(beat.id);
-                      return (
-                        <li className={included ? "is-included" : "is-excluded"} key={beat.id}>
+                  <p className="important-editor-instruction">O material original continua preservado. Esta montagem altera apenas o que o público verá.</p>
+                  <section className="important-cut-group is-in-cut" aria-labelledby="included-moments-title">
+                    <header><h4 id="included-moments-title">NO CORTE <span>• {includedImportantBeats.length}</span></h4><small>Arraste para reorganizar</small></header>
+                    <ol className="important-edit-beat-list">
+                      {includedImportantBeats.length === 0 && <li className="important-beat-empty">Nenhum momento incluído no corte.</li>}
+                      {includedImportantBeats.map((beat, televisedIndex) => (
+                        <li
+                          className={draggedImportantBeatId === beat.id ? "is-included is-dragging" : "is-included"}
+                          draggable
+                          key={beat.id}
+                          onDragEnd={() => setDraggedImportantBeatId(null)}
+                          onDragOver={(event) => event.preventDefault()}
+                          onDragStart={() => setDraggedImportantBeatId(beat.id)}
+                          onDrop={(event) => {
+                            event.preventDefault();
+                            if (draggedImportantBeatId) reorderImportantBeat(editingImportantChain.id, draggedImportantBeatId, beat.id);
+                            setDraggedImportantBeatId(null);
+                          }}
+                        >
                           <div className="important-edit-beat-index">
-                            <b>{included ? String(televisedIndex + 1).padStart(2, "0") : "—"}</b>
+                            <b>{String(televisedIndex + 1).padStart(2, "0")}</b>
                             <small>ORIGINAL {String(beat.order).padStart(2, "0")}</small>
                           </div>
                           <div className="important-edit-beat-copy">
-                            <span>{importantEventRoleLabels[beat.role]}</span>
+                            <span>{importantEventRoleLabels[beat.role]} · {formatClockDuration(importantBeatDurationSeconds[beat.role])}</span>
                             <h4>{beat.title}</h4>
                             <p>{beat.description}</p>
                             <small><b>{participantNames(beat.participantIds)}</b><i>·</i>{beat.location}</small>
                           </div>
                           <div className="important-edit-beat-actions">
                             <button
-                              aria-pressed={included}
-                              className={included ? "is-active" : ""}
+                              className="is-remove"
                               onClick={() => toggleImportantBeat(editingImportantChain.id, beat.id)}
                               type="button"
                             >
-                              {included ? "Incluído" : "Excluído"}
+                              Retirar
                             </button>
                             <div>
                               <button
                                 aria-label={`Mover ${beat.title} para cima`}
-                                disabled={!included || televisedIndex === 0}
+                                disabled={televisedIndex === 0}
                                 onClick={() => moveImportantBeat(editingImportantChain.id, beat.id, -1)}
                                 type="button"
-                              >↑</button>
+                              >←</button>
                               <button
                                 aria-label={`Mover ${beat.title} para baixo`}
-                                disabled={!included || televisedIndex === editingImportantEdit.televisedOrder.length - 1}
+                                disabled={televisedIndex === includedImportantBeats.length - 1}
                                 onClick={() => moveImportantBeat(editingImportantChain.id, beat.id, 1)}
                                 type="button"
-                              >↓</button>
+                              >→</button>
                             </div>
                           </div>
                         </li>
-                      );
-                    })}
-                  </ol>
+                      ))}
+                    </ol>
+                  </section>
+                  <section className="important-cut-group is-out-cut" aria-labelledby="excluded-moments-title">
+                    <header><h4 id="excluded-moments-title">FORA DO CORTE <span>• {excludedImportantBeats.length}</span></h4><small>Material preservado</small></header>
+                    <ul className="important-excluded-list">
+                      {excludedImportantBeats.length === 0 && <li className="important-beat-empty">Todos os momentos estão no corte.</li>}
+                      {excludedImportantBeats.map((beat) => (
+                        <li key={beat.id}>
+                          <div><span>{importantEventRoleLabels[beat.role]}</span><strong>{beat.title}</strong><small>{beat.location} · {formatClockDuration(importantBeatDurationSeconds[beat.role])}</small></div>
+                          <button onClick={() => toggleImportantBeat(editingImportantChain.id, beat.id)} type="button">+ Incluir</button>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
                 </section>
 
                 <aside className="important-editor-settings">
                   <section className="important-narrative-reading" aria-live="polite">
                     <div className="important-editor-section-heading">
-                      <div><small>ANÁLISE AUTOMÁTICA</small><h3>Leitura da edição</h3></div>
-                      <span>ATUALIZAÇÃO AO VIVO</span>
+                      <div><small>ANÁLISE AUTOMÁTICA</small><h3>Leitura provável do público</h3></div>
+                      <span className="is-live">● AO VIVO</span>
                     </div>
+                    {importantReadingChange && (
+                      <article className="important-reading-change">
+                        <b>MUDOU AGORA</b>
+                        <p>{importantReadingChange}</p>
+                      </article>
+                    )}
+                    <article className="important-current-reading">
+                      <span>LEITURA ATUAL</span>
+                      <strong>{importantEventConstructionLabels[editingImportantEdit.detectedEditorialConstruction]}</strong>
+                      <p>{editingImportantEdit.versionSummary}</p>
+                    </article>
                     <div className="narrative-reading-grid">
                       <article>
                         <span>Foco principal</span>
@@ -2499,34 +2659,33 @@ export default function Home() {
                         />
                       </article>
                       <article>
-                        <span>Construção detectada</span>
+                        <span>Construção percebida</span>
                         <strong>{importantEventConstructionLabels[editingImportantEdit.detectedEditorialConstruction]}</strong>
                       </article>
-                      <article className="narrative-reading-wide">
-                        <span>Contexto omitido</span>
+                      <article className="narrative-reading-wide narrative-reading-context">
+                        <span>Contexto que não chega ao público</span>
                         <p>{editingImportantEdit.missingContextDescription}</p>
                       </article>
-                      <article className="narrative-reading-wide narrative-reading-summary">
-                        <span>Resumo da versão</span>
-                        <p>{editingImportantEdit.versionSummary}</p>
-                      </article>
                     </div>
-                    <dl className="narrative-reading-metrics">
-                      <div><dt>Duração final</dt><dd>{formatClockDuration(editingImportantEdit.finalDurationSeconds)}</dd></div>
-                      <div><dt>Momentos</dt><dd>{editingImportantEdit.selectedBeatIds.length} / {weekOneImportantEventBeats.length}</dd></div>
-                    </dl>
                   </section>
                 </aside>
               </div>
             </div>
 
             <footer className="important-internal-footer">
-              <span className={importantEditError ? "editor-error" : "status-note"}>
-                {importantEditError || "A montagem altera somente a versão exibida no programa."}
+              <span className="important-autosave-note">✓ Rascunho salvo automaticamente</span>
+              <span className={importantEditError || !importantVersionValidation?.canSaveToTimeline ? "editor-error" : "status-note"}>
+                {importantEditError || importantVersionValidation?.reason || `${editingImportantEdit.selectedBeatIds.length} momentos · ${formatClockDuration(editingImportantEdit.finalDurationSeconds)}`}
               </span>
               <div>
-                <button onClick={() => setEditingImportantChainId(null)} type="button">Continuar depois</button>
-                <button className="button button-primary" onClick={confirmImportantEventEdit} type="button">Salvar versão na timeline</button>
+                <button onClick={closeImportantDraft} type="button">Salvar rascunho e fechar</button>
+                <button
+                  className="button button-primary"
+                  disabled={!importantVersionValidation?.canSaveToTimeline}
+                  onClick={confirmImportantEventEdit}
+                  title={importantVersionValidation?.reason || "Salvar versão na timeline"}
+                  type="button"
+                >Salvar versão na timeline</button>
               </div>
             </footer>
           </section>

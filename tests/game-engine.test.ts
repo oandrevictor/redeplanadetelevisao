@@ -18,6 +18,7 @@ import { simulateSeasons } from "../game/simulator";
 import { createInitialState } from "../game/state";
 import type { ChallengeType, GameState } from "../game/types";
 import {
+  buildEditorialAlerts,
   classifyDuration,
   classifyFocus,
   classifyRhythm,
@@ -44,6 +45,16 @@ test("editor qualitative readings follow the approved boundaries", () => {
   assert.equal(classifyVariety(["Humor"]).label, "Baixa");
   assert.equal(classifyVariety(["Humor", "Festa"]).label, "Moderada");
   assert.equal(classifyVariety(["Humor", "Festa", "Prova"]).label, "Boa");
+
+  const simultaneousAlerts = buildEditorialAlerts(
+    { label: "Longa", state: "high" },
+    { label: "Concentrado em Ravi", state: "high" },
+    { label: "Moderada", state: "good" },
+    { label: "Equilibrado", state: "good" },
+  );
+  assert.equal(simultaneousAlerts.length, 2);
+  assert.match(simultaneousAlerts[0], /Episódio longo/);
+  assert.match(simultaneousAlerts[1], /Ravi/);
 
   const name = (id: string) => ({ a: "Ana", b: "Beto" })[id as "a" | "b"] ?? id;
   assert.equal(classifyFocus([], name).label, "Ainda sem leitura");

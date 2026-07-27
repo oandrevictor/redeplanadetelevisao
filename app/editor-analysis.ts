@@ -57,6 +57,22 @@ export function classifyFocus(
   return { label: "Distribuído", state: "good" };
 }
 
+export function buildEditorialAlerts(
+  duration: EditorialReading,
+  focus: EditorialReading,
+  variety: EditorialReading,
+  rhythm: EditorialReading,
+): string[] {
+  const alerts: string[] = [];
+  if (duration.label === "Longa") alerts.push("Episódio longo: a duração acima da faixa pode cansar a audiência.");
+  if (duration.label === "Curta") alerts.push("Episódio curto: a duração abaixo da faixa pode afetar a recepção do público.");
+  if (focus.label.startsWith("Concentrado")) alerts.push(`${focus.label}. Confira se esse é o foco desejado.`);
+  if (variety.label === "Baixa") alerts.push("Pouca variedade: considere combinar acontecimentos de tipos diferentes.");
+  if (rhythm.label === "Acelerado") alerts.push("Ritmo acelerado: muitos cortes curtos podem dificultar o acompanhamento.");
+  if (rhythm.label === "Lento") alerts.push("Ritmo lento: cortes longos em sequência podem reduzir a energia do episódio.");
+  return alerts;
+}
+
 export function validateEditorCut(
   editorialEventCount: number,
   requiredEvents: RequiredEditorialEvent[],

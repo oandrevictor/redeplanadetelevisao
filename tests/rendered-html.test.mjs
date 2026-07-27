@@ -7,7 +7,12 @@ import {
   importantEventGenerationConfig,
   selectRumorChainParticipants,
 } from "../app/important-event-generation.ts";
-import { analyzeImportantEventEdit } from "../app/important-event-analysis.ts";
+import {
+  IMPORTANT_EVENT_MAX_DURATION_SECONDS,
+  IMPORTANT_EVENT_MIN_MOMENTS,
+  analyzeImportantEventEdit,
+  validateImportantEventVersion,
+} from "../app/important-event-analysis.ts";
 
 const personalityTraits = (overrides = {}) => ({
   carisma: 3,
@@ -168,6 +173,7 @@ test("Edição uses the approved timeline, bank and persistent cut-state workspa
   assert.match(analysis, /classifyRhythm/);
   assert.match(analysis, /classifyVariety/);
   assert.match(analysis, /classifyFocus/);
+  assert.match(analysis, /buildEditorialAlerts/);
   assert.match(analysis, /firstEmptyProgramZoneIndex/);
   assert.match(analysis, /item\.kind === "ad" \|\| item\.id !== id/);
 
@@ -179,15 +185,18 @@ test("Edição uses the approved timeline, bank and persistent cut-state workspa
   assert.match(editorSource, /FAIXA IDEAL/);
   assert.match(editorSource, /duration-range-scale/);
   assert.match(editorSource, /duration-current-label/);
-  assert.match(editorSource, /Episódio longo: a duração acima da faixa pode cansar a audiência/);
-  assert.match(editorSource, /Episódio curto: a duração abaixo da faixa pode afetar a recepção do público/);
+  assert.match(analysis, /Episódio longo: a duração acima da faixa pode cansar a audiência/);
+  assert.match(analysis, /Episódio curto: a duração abaixo da faixa pode afetar a recepção do público/);
   assert.match(editorSource, /important-card-footer/);
   assert.match(editorSource, /event-bank-content/);
   assert.match(editorSource, /<div className="event-grid">[\s\S]*?showImportantFootage[\s\S]*?important-footage-card/);
   assert.doesNotMatch(editorSource, /important-footage-feature/);
   assert.match(editorSource, /event-card-labels/);
   assert.match(editorSource, /<span>\{event\.category\}<\/span>/);
-  assert.match(editorSource, /<b>BLOCO \{index \+ 1\}<\/b>/);
+  assert.match(editorSource, /<b>BLOCO \{blockIndex \+ 1\}<\/b>/);
+  assert.match(editorSource, /emptyProgramZones\.has\(0\) && dropZone\(0, 0\)/);
+  assert.match(editorSource, /item\.kind === "ad" && emptyProgramZones\.has\(followingBlockIndex\)/);
+  assert.match(editorSource, /editorialMessages\.map/);
   assert.match(editorSource, /event\.description/);
   assert.match(editorSource, /event-card-participants/);
   assert.match(editorSource, /required-badge/);
@@ -208,10 +217,14 @@ test("Edição uses the approved timeline, bank and persistent cut-state workspa
 
   assert.match(css, /grid-template-columns:\s*minmax\(0, 81fr\) minmax\(200px, 19fr\)/);
   assert.match(css, /\.computer-shell \.timeline-track \.timeline-ad[\s\S]*?flex:\s*0 0 68px/);
+  assert.match(css, /\.computer-shell \.timeline-track \.timeline-ad[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\)/);
   assert.match(css, /\.timeline-ad-copy b[\s\S]*?font:\s*700 8px/);
   assert.match(css, /\.timeline-ad-copy strong[\s\S]*?font:\s*700 15px/);
+  assert.match(css, /\.timeline-ad \.timeline-controls[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.timeline-ad \.timeline-controls button[\s\S]*?height:\s*24px/);
   assert.match(css, /grid-auto-rows:\s*148px/);
   assert.match(css, /\.computer-shell \.important-card-footer > button[\s\S]*?position:\s*static/);
+  assert.match(css, /\.computer-shell \.important-card-footer > button[\s\S]*?background:\s*var\(--chrome\)/);
   assert.match(css, /Consolidated Edição layout[\s\S]*?grid-template-rows:\s*175px minmax\(0, 1fr\)/);
   assert.equal((css.match(/Consolidated Edição layout/g) ?? []).length, 1);
   assert.doesNotMatch(css, /Final desktop proportions|Final consistency pass|Mockup-alignment corrections/);
@@ -311,15 +324,24 @@ test("source contains the complete Important Event internal editing workflow", a
   assert.match(page, /important-footage-card/);
   assert.match(page, /importantCardEdit\.status === "not_edited" \? "EDITAR" : "REABRIR"/);
   assert.match(page, /Editor interno de acontecimento/);
-  assert.match(page, /editingImportantBeats\.map/);
+  assert.match(page, /includedImportantBeats\.map/);
+  assert.match(page, /excludedImportantBeats\.map/);
   assert.match(page, /toggleImportantBeat/);
   assert.match(page, /moveImportantBeat/);
-  assert.match(page, /Leitura da edição/);
+  assert.match(page, /reorderImportantBeat/);
+  assert.match(page, /draggable/);
+  assert.match(page, /VERSÃO EXIBIDA/);
+  assert.match(page, /NO CORTE/);
+  assert.match(page, /FORA DO CORTE/);
+  assert.match(page, /Leitura provável do público/);
   assert.match(page, /Favorecido pela edição/);
   assert.match(page, /Prejudicado pela edição/);
-  assert.match(page, /Construção detectada/);
-  assert.match(page, /Contexto omitido/);
-  assert.match(page, /Resumo da versão/);
+  assert.match(page, /Construção percebida/);
+  assert.match(page, /Contexto que não chega ao público/);
+  assert.match(page, /MUDOU AGORA/);
+  assert.match(page, /Rascunho salvo automaticamente/);
+  assert.match(page, /Salvar rascunho e fechar/);
+  assert.match(page, /disabled=\{!importantVersionValidation\?\.canSaveToTimeline\}/);
   assert.match(page, /withAutomaticImportantAnalysis/);
   assert.doesNotMatch(page, /Enquadramento Editorial/);
   assert.doesNotMatch(page, /Foco na Reação/);
@@ -342,6 +364,22 @@ test("source contains the complete Important Event internal editing workflow", a
   assert.match(css, /\.computer-shell \.important-internal-editor/);
   assert.match(css, /\.computer-shell \.timeline-important-event/);
   assert.match(css, /\.computer-shell \.important-narrative-reading/);
+  assert.match(css, /\.computer-shell \.important-version-track/);
+  assert.match(css, /@keyframes important-reading-pulse/);
+});
+
+test("Important Event timeline validation enforces two moments and the rigid 03:00 limit", () => {
+  assert.equal(IMPORTANT_EVENT_MIN_MOMENTS, 2);
+  assert.equal(IMPORTANT_EVENT_MAX_DURATION_SECONDS, 180);
+
+  assert.equal(validateImportantEventVersion(0, 0).canSaveToTimeline, false);
+  assert.match(validateImportantEventVersion(1, 120).reason, /pelo menos 2 momentos/i);
+  assert.equal(validateImportantEventVersion(2, 179).canSaveToTimeline, true);
+  assert.equal(validateImportantEventVersion(2, 180).canSaveToTimeline, true);
+  assert.equal(validateImportantEventVersion(2, 180).durationState, "limit");
+  assert.equal(validateImportantEventVersion(2, 181).canSaveToTimeline, false);
+  assert.equal(validateImportantEventVersion(2, 181).exceededSeconds, 1);
+  assert.match(validateImportantEventVersion(2, 181).reason, /0:01/);
 });
 
 test("automatic narrative analysis reacts to omissions and televised order", () => {

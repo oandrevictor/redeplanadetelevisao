@@ -2689,13 +2689,14 @@ select:focus-visible {
 
 .computer-shell .important-editor-backdrop {
   z-index: 100;
+  padding: 12px;
 }
 
 .computer-shell .important-internal-editor {
-  width: min(1120px, 97vw);
-  height: min(840px, 95svh);
+  width: min(1180px, 98vw);
+  height: min(850px, 96svh);
   display: grid;
-  grid-template-rows: 29px minmax(0, 1fr) 52px;
+  grid-template-rows: 29px minmax(0, 1fr) 54px;
   padding: 3px;
   overflow: hidden;
   background: var(--chrome);
@@ -2721,49 +2722,63 @@ select:focus-visible {
 .computer-shell .important-internal-body {
   min-height: 0;
   overflow: auto;
-  padding: 10px;
+  padding: 9px;
   background: var(--surface-alt);
   box-shadow: inset 1px 1px 0 var(--chrome-shadow), inset -1px -1px 0 var(--chrome-hi);
+}
+
+.computer-shell .important-editor-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 310px;
+  gap: 8px;
+}
+
+.computer-shell .important-editor-story,
+.computer-shell .important-duration-panel,
+.computer-shell .important-version-strip,
+.computer-shell .important-moment-editor,
+.computer-shell .important-editor-settings > section {
+  border: 1px solid var(--document-rule);
+  background: var(--surface);
 }
 
 .computer-shell .important-editor-story {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 14px;
-  padding: 12px 14px;
-  border: 1px solid var(--document-rule);
+  gap: 12px;
+  min-height: 102px;
+  padding: 10px 12px;
   border-left: 4px solid #bd3f32;
-  background: var(--surface);
 }
 
 .computer-shell .important-editor-story h2 {
-  margin: 7px 0 5px;
-  font: 700 22px/1.05 Tahoma, Arial, sans-serif;
+  margin: 6px 0 4px;
+  font: 700 20px/1.05 Tahoma, Arial, sans-serif;
   letter-spacing: -.02em;
 }
 
 .computer-shell .important-editor-story p {
-  max-width: 730px;
+  max-width: 650px;
   margin: 0;
   color: var(--ui-muted);
-  font: 10px/1.4 Tahoma, Arial, sans-serif;
+  font: 9px/1.35 Tahoma, Arial, sans-serif;
 }
 
 .computer-shell .important-editor-story-cast {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 3px;
 }
 
 .computer-shell .important-editor-story-cast > div {
-  width: 58px;
+  width: 45px;
   text-align: center;
 }
 
 .computer-shell .important-editor-story-cast .avatar-small {
-  width: 42px;
-  height: 46px;
-  margin: 0 auto 3px;
+  width: 34px;
+  height: 38px;
+  margin: 0 auto 2px;
   border: 1px solid var(--chrome-shadow);
 }
 
@@ -2775,42 +2790,101 @@ select:focus-visible {
   white-space: nowrap;
 }
 
-.computer-shell .important-editor-layout {
+.computer-shell .important-duration-panel {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 330px;
-  gap: 9px;
-  margin-top: 9px;
+  grid-template-columns: 1fr auto;
+  align-content: center;
+  gap: 6px 12px;
+  padding: 10px 12px;
+  border-left: 4px solid #187347;
 }
 
-.computer-shell .important-moment-editor,
-.computer-shell .important-editor-settings > section {
-  border: 1px solid var(--document-rule);
-  background: var(--surface);
+.computer-shell .important-duration-panel.is-exceeded {
+  border-left-color: #bd3f32;
 }
 
-.computer-shell .important-moment-editor {
-  padding: 10px;
+.computer-shell .important-duration-panel > div > span {
+  display: block;
+  color: var(--ui-muted);
+  font: 700 7px "Courier New", monospace;
 }
 
-.computer-shell .important-editor-settings {
-  display: grid;
-  align-content: start;
-  gap: 8px;
+.computer-shell .important-duration-panel > div > b {
+  display: block;
+  margin-top: 2px;
+  font: 700 24px/1 "Courier New", monospace;
 }
 
-.computer-shell .important-editor-settings > section {
-  padding: 9px;
+.computer-shell .important-duration-limit {
+  text-align: right;
 }
 
-.computer-shell .important-editor-section-heading {
+.computer-shell .important-duration-limit b {
+  color: var(--ui-muted);
+  font-size: 15px !important;
+}
+
+.computer-shell .important-duration-meter {
+  grid-column: 1 / -1;
+  height: 9px;
+  overflow: hidden;
+  border: 1px solid var(--chrome-shadow);
+  background: repeating-linear-gradient(90deg, var(--surface-alt) 0 23px, var(--document-rule) 24px);
+  box-shadow: inset 1px 1px 0 rgba(0, 0, 0, .15);
+}
+
+.computer-shell .important-duration-meter i {
+  display: block;
+  height: 100%;
+  background: #187347;
+}
+
+.computer-shell .important-duration-panel.is-limit .important-duration-meter i {
+  background: #b87508;
+}
+
+.computer-shell .important-duration-panel.is-exceeded .important-duration-meter i {
+  background: #bd3f32;
+}
+
+.computer-shell .important-duration-panel > p {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  color: #187347;
+  font: 700 8px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-duration-panel.is-exceeded > p {
+  color: #a42f28;
+}
+
+.computer-shell .important-duration-panel > p span {
+  color: var(--ui-muted);
+  font-weight: 400;
+}
+
+.computer-shell .important-version-strip {
+  margin-top: 8px;
+  padding: 8px;
+}
+
+.computer-shell .important-version-heading,
+.computer-shell .important-editor-section-heading,
+.computer-shell .important-cut-group > header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding-bottom: 7px;
+}
+
+.computer-shell .important-version-heading {
+  padding-bottom: 6px;
   border-bottom: 1px solid var(--document-rule);
 }
 
+.computer-shell .important-version-heading small,
 .computer-shell .important-editor-section-heading small {
   display: block;
   color: #a42f28;
@@ -2818,99 +2892,233 @@ select:focus-visible {
   letter-spacing: .1em;
 }
 
+.computer-shell .important-version-heading h3,
 .computer-shell .important-editor-section-heading h3 {
   margin: 1px 0 0;
-  font: 700 14px Tahoma, Arial, sans-serif;
+  font: 700 13px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-version-heading > span,
+.computer-shell .important-editor-section-heading > span {
+  color: var(--ui-muted);
+  font: 7px "Courier New", monospace;
+}
+
+.computer-shell .important-version-track {
+  display: flex;
+  gap: 5px;
+  min-height: 64px;
+  margin: 7px 0 0;
+  padding: 0 0 3px;
+  overflow-x: auto;
+  list-style: none;
+}
+
+.computer-shell .important-version-track > li:not(.important-version-empty) {
+  display: grid;
+  grid-template-columns: 28px minmax(120px, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  flex: 1 0 166px;
+  min-width: 166px;
+  max-width: 230px;
+  padding: 7px;
+  border: 1px solid var(--document-rule);
+  border-left: 3px solid var(--selection-bg);
+  background: var(--surface-alt);
+  cursor: grab;
+  box-shadow: inset 1px 1px 0 var(--chrome-hi), inset -1px -1px 0 var(--chrome-shadow);
+}
+
+.computer-shell .important-version-track > li.is-dragging,
+.computer-shell .important-edit-beat-list > li.is-dragging {
+  opacity: .48;
+}
+
+.computer-shell .important-version-track > li > b {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  background: var(--selection-bg);
+  color: var(--selection-text);
+  font: 700 9px "Courier New", monospace;
+}
+
+.computer-shell .important-version-track > li div {
+  min-width: 0;
+}
+
+.computer-shell .important-version-track > li span,
+.computer-shell .important-version-track > li strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.computer-shell .important-version-track > li span {
+  color: var(--selection-bg);
+  font: 700 6px "Courier New", monospace;
+  text-transform: uppercase;
+}
+
+.computer-shell .important-version-track > li strong {
+  margin-top: 3px;
+  font: 700 9px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-version-track > li > small {
+  color: var(--ui-muted);
+  font: 7px "Courier New", monospace;
+}
+
+.computer-shell .important-version-empty,
+.computer-shell .important-beat-empty {
+  display: grid !important;
+  place-items: center;
+  width: 100%;
+  min-height: 46px !important;
+  color: var(--ui-muted);
+  font: 8px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-editor-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.computer-shell .important-moment-editor,
+.computer-shell .important-editor-settings > section {
+  padding: 9px;
+}
+
+.computer-shell .important-editor-settings {
+  min-width: 0;
+}
+
+.computer-shell .important-editor-section-heading {
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--document-rule);
 }
 
 .computer-shell .important-editor-section-heading > span {
   padding: 3px 5px;
   background: var(--surface-alt);
-  color: var(--ui-muted);
-  font: 7px "Courier New", monospace;
 }
 
 .computer-shell .important-editor-instruction {
-  margin: 7px 0;
+  margin: 6px 0 8px;
   color: var(--ui-muted);
-  font: 9px/1.35 Tahoma, Arial, sans-serif;
+  font: 8px/1.35 Tahoma, Arial, sans-serif;
 }
 
-.computer-shell .important-edit-beat-list {
-  display: grid;
-  gap: 5px;
+.computer-shell .important-cut-group {
+  border: 1px solid var(--document-rule);
+}
+
+.computer-shell .important-cut-group + .important-cut-group {
+  margin-top: 8px;
+}
+
+.computer-shell .important-cut-group > header {
+  min-height: 25px;
+  padding: 4px 7px;
+  background: var(--selection-bg);
+  color: var(--selection-text);
+}
+
+.computer-shell .important-cut-group.is-out-cut > header {
+  background: var(--chrome-dark);
+}
+
+.computer-shell .important-cut-group > header h4 {
   margin: 0;
-  padding: 0;
+  font: 700 8px "Courier New", monospace;
+}
+
+.computer-shell .important-cut-group > header h4 span {
+  opacity: .78;
+}
+
+.computer-shell .important-cut-group > header small {
+  font: 7px Tahoma, Arial, sans-serif;
+  opacity: .8;
+}
+
+.computer-shell .important-edit-beat-list,
+.computer-shell .important-excluded-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 5px;
   list-style: none;
 }
 
 .computer-shell .important-edit-beat-list > li {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) 88px;
-  gap: 8px;
+  grid-template-columns: 45px minmax(0, 1fr) 80px;
+  gap: 7px;
   align-items: center;
-  min-height: 82px;
-  padding: 7px;
-  border-left: 3px solid #bd3f32;
+  min-height: 76px;
+  padding: 6px;
+  border-left: 3px solid var(--selection-bg);
   background: var(--surface-alt);
   box-shadow: inset 1px 1px 0 var(--chrome-hi), inset -1px -1px 0 var(--chrome-shadow);
 }
 
-.computer-shell .important-edit-beat-list > li.is-excluded {
-  border-left-color: var(--chrome-shadow);
-  opacity: .66;
-}
-
 .computer-shell .important-edit-beat-index {
   display: grid;
-  gap: 4px;
+  gap: 3px;
   text-align: center;
 }
 
 .computer-shell .important-edit-beat-index b {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   margin: auto;
   border: 1px solid var(--chrome-shadow);
   background: var(--surface);
-  color: #a42f28;
-  font: 700 12px "Courier New", monospace;
+  color: var(--selection-bg);
+  font: 700 11px "Courier New", monospace;
 }
 
-.computer-shell .important-edit-beat-index small {
+.computer-shell .important-edit-beat-index small,
+.computer-shell .important-edit-beat-copy > small {
   color: var(--ui-muted);
   font: 6px "Courier New", monospace;
 }
 
-.computer-shell .important-edit-beat-copy > span {
+.computer-shell .important-edit-beat-copy > span,
+.computer-shell .important-excluded-list span {
   display: inline-block;
-  padding: 2px 5px;
-  background: color-mix(in srgb, #bd3f32 14%, var(--surface));
-  color: #a42f28;
-  font: 700 7px "Courier New", monospace;
+  padding: 2px 4px;
+  background: color-mix(in srgb, var(--selection-bg) 12%, var(--surface));
+  color: var(--selection-bg);
+  font: 700 6px "Courier New", monospace;
   text-transform: uppercase;
 }
 
 .computer-shell .important-edit-beat-copy h4 {
-  margin: 4px 0 2px;
-  font: 700 12px/1.2 Tahoma, Arial, sans-serif;
+  margin: 3px 0 2px;
+  font: 700 11px/1.15 Tahoma, Arial, sans-serif;
 }
 
 .computer-shell .important-edit-beat-copy p {
   margin: 0;
   color: var(--ui-muted);
-  font: 9px/1.32 Tahoma, Arial, sans-serif;
+  font: 8px/1.25 Tahoma, Arial, sans-serif;
 }
 
 .computer-shell .important-edit-beat-copy > small {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-top: 4px;
-  color: var(--ui-muted);
-  font: 7px Tahoma, Arial, sans-serif;
+  margin-top: 3px;
 }
 
 .computer-shell .important-edit-beat-copy > small i {
@@ -2919,23 +3127,23 @@ select:focus-visible {
 
 .computer-shell .important-edit-beat-actions {
   display: grid;
-  gap: 5px;
+  gap: 4px;
 }
 
 .computer-shell .important-edit-beat-actions button,
+.computer-shell .important-excluded-list button,
 .computer-shell .important-internal-footer button {
-  min-height: 25px;
+  min-height: 24px;
   border: 0;
   background: var(--chrome);
   color: var(--ui-text);
   box-shadow: inset 1px 1px 0 var(--chrome-hi), inset -1px -1px 0 var(--chrome-dark);
   cursor: pointer;
-  font: 8px Tahoma, Arial, sans-serif;
+  font: 7px Tahoma, Arial, sans-serif;
 }
 
-.computer-shell .important-edit-beat-actions > button.is-active {
-  background: var(--selection-bg);
-  color: var(--selection-text);
+.computer-shell .important-edit-beat-actions > button.is-remove {
+  color: #a42f28;
 }
 
 .computer-shell .important-edit-beat-actions > div {
@@ -2944,20 +3152,104 @@ select:focus-visible {
   gap: 3px;
 }
 
-.computer-shell .important-edit-beat-actions button:disabled {
+.computer-shell .important-edit-beat-actions button:disabled,
+.computer-shell .important-internal-footer button:disabled {
   color: var(--chrome-shadow);
   cursor: default;
+  box-shadow: inset 1px 1px 0 var(--chrome-shadow);
+}
+
+.computer-shell .important-excluded-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.computer-shell .important-excluded-list > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 68px;
+  gap: 6px;
+  align-items: center;
+  min-height: 52px;
+  padding: 6px;
+  border-left: 3px solid var(--chrome-shadow);
+  background: var(--surface-alt);
+}
+
+.computer-shell .important-excluded-list strong,
+.computer-shell .important-excluded-list small {
+  display: block;
+}
+
+.computer-shell .important-excluded-list strong {
+  margin: 3px 0;
+  font: 700 9px/1.15 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-excluded-list small {
+  color: var(--ui-muted);
+  font: 6px "Courier New", monospace;
 }
 
 .computer-shell .important-narrative-reading {
   border-left: 4px solid #bd3f32 !important;
 }
 
+.computer-shell .important-editor-section-heading .is-live {
+  color: #187347;
+  font-weight: 700;
+}
+
+.computer-shell .important-reading-change {
+  margin-top: 7px;
+  padding: 8px;
+  border: 1px solid #b87508;
+  border-left: 4px solid #b87508;
+  background: color-mix(in srgb, #f3c45c 26%, var(--surface));
+  animation: important-reading-pulse .26s ease-out;
+}
+
+.computer-shell .important-reading-change b,
+.computer-shell .important-current-reading > span,
+.computer-shell .narrative-reading-grid > article > span {
+  display: block;
+  color: var(--ui-muted);
+  font: 700 7px "Courier New", monospace;
+  text-transform: uppercase;
+}
+
+.computer-shell .important-reading-change b {
+  color: #8a5700;
+}
+
+.computer-shell .important-reading-change p {
+  margin: 4px 0 0;
+  font: 8px/1.35 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-current-reading {
+  margin-top: 7px;
+  padding: 9px;
+  border: 1px solid var(--document-rule);
+  background: var(--surface-alt);
+}
+
+.computer-shell .important-current-reading strong {
+  display: block;
+  margin-top: 4px;
+  color: #a42f28;
+  font: 700 13px/1.15 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-current-reading p,
+.computer-shell .narrative-reading-grid p {
+  margin: 5px 0 0;
+  font: 8px/1.35 Tahoma, Arial, sans-serif;
+}
+
 .computer-shell .narrative-reading-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 5px;
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .computer-shell .narrative-reading-grid > article {
@@ -2967,124 +3259,106 @@ select:focus-visible {
   background: var(--surface-alt);
 }
 
-.computer-shell .narrative-reading-grid > article > span,
-.computer-shell .narrative-reading-metrics dt {
-  display: block;
-  color: var(--ui-muted);
-  font: 7px "Courier New", monospace;
-  text-transform: uppercase;
-}
-
 .computer-shell .narrative-reading-grid > article > strong {
   display: block;
   margin-top: 5px;
   color: #a42f28;
-  font: 700 12px/1.2 Tahoma, Arial, sans-serif;
+  font: 700 10px/1.2 Tahoma, Arial, sans-serif;
 }
 
 .computer-shell .narrative-participant-value {
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: 34px;
-  margin-top: 4px;
+  gap: 5px;
+  min-height: 31px;
+  margin-top: 3px;
 }
 
 .computer-shell .narrative-participant-value > div {
   display: flex;
   flex: 0 0 auto;
-  padding-left: 5px;
+  padding-left: 4px;
 }
 
 .computer-shell .narrative-participant-value .avatar-small {
-  width: 28px;
-  height: 31px;
-  margin-left: -5px;
+  width: 25px;
+  height: 28px;
+  margin-left: -4px;
   border: 1px solid var(--surface);
 }
 
 .computer-shell .narrative-participant-value > b {
-  font: 700 9px/1.25 Tahoma, Arial, sans-serif;
+  font: 700 8px/1.2 Tahoma, Arial, sans-serif;
 }
 
 .computer-shell .narrative-reading-grid .narrative-reading-wide {
   grid-column: 1 / -1;
 }
 
-.computer-shell .narrative-reading-wide p {
-  margin: 5px 0 0;
-  color: var(--ui-text);
-  font: 9px/1.4 Tahoma, Arial, sans-serif;
-}
-
-.computer-shell .narrative-reading-summary {
-  border-left: 3px solid #bd3f32 !important;
-}
-
-.computer-shell .narrative-reading-metrics {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 5px;
-  margin: 7px 0 0;
-}
-
-.computer-shell .narrative-reading-metrics > div {
-  padding: 5px;
-  background: var(--surface-alt);
-}
-
-.computer-shell .narrative-reading-metrics dd {
-  margin: 3px 0 0;
-  font: 700 11px Tahoma, Arial, sans-serif;
+.computer-shell .narrative-reading-context {
+  border-left: 3px solid #b87508 !important;
 }
 
 .computer-shell .important-internal-footer {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   padding: 6px 7px 6px 10px;
+}
+
+.computer-shell .important-autosave-note {
+  color: #187347;
+  font: 700 8px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .important-internal-footer > span:nth-child(2) {
+  text-align: center;
 }
 
 .computer-shell .important-internal-footer > div {
   display: flex;
-  gap: 7px;
+  gap: 6px;
 }
 
 .computer-shell .important-internal-footer button {
-  min-width: 112px;
-  padding: 0 10px;
+  min-width: 135px;
+  padding: 0 9px;
 }
 
 .computer-shell .important-internal-footer .button-primary {
-  min-width: 176px;
+  min-width: 174px;
+}
+
+@keyframes important-reading-pulse {
+  from { background: color-mix(in srgb, #f3c45c 62%, var(--surface)); }
+  to { background: color-mix(in srgb, #f3c45c 26%, var(--surface)); }
 }
 
 @media (max-width: 900px) {
+  .computer-shell .important-editor-overview,
   .computer-shell .important-editor-layout {
     grid-template-columns: 1fr;
   }
 
   .computer-shell .important-editor-settings {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    order: -1;
   }
 
-  .computer-shell .important-narrative-reading {
+  .computer-shell .important-internal-footer {
+    grid-template-columns: 1fr auto;
+  }
+
+  .computer-shell .important-internal-footer > span:nth-child(2) {
     grid-column: 1 / -1;
+    grid-row: 2;
+    text-align: left;
   }
 }
 
 @media (max-width: 620px) {
-  .computer-shell .important-footage-card {
-    grid-column: 1;
-  }
-
-  .computer-shell .important-footage-card dl,
-  .computer-shell .important-editor-settings {
-    grid-template-columns: 1fr;
-  }
-
-  .computer-shell .important-editor-story {
+  .computer-shell .important-editor-story,
+  .computer-shell .important-excluded-list {
     grid-template-columns: 1fr;
   }
 
@@ -3103,7 +3377,12 @@ select:focus-visible {
 
   .computer-shell .important-internal-footer {
     align-items: stretch;
-    flex-direction: column;
+    grid-template-columns: 1fr;
+  }
+
+  .computer-shell .important-internal-footer > span:nth-child(2) {
+    grid-column: auto;
+    grid-row: auto;
   }
 
   .computer-shell .important-internal-footer > div {
@@ -3111,7 +3390,6 @@ select:focus-visible {
     grid-template-columns: 1fr;
   }
 }
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -7002,6 +7280,11 @@ select:focus-visible {
   font: 8px/1.3 Tahoma, Arial, sans-serif;
 }
 
+.computer-shell .editorial-notes {
+  display: grid;
+  gap: 3px;
+}
+
 .computer-shell .editor-state-panel > .cut-duration-state.is-good,
 .computer-shell .editor-state-panel > .required-state.is-complete {
   border-left: 4px solid #238b57;
@@ -7273,12 +7556,17 @@ select:focus-visible {
     flex: 0 0 68px;
     min-height: 0;
     display: grid;
-    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 24px;
     gap: 4px;
     padding: 5px;
     border-left: 0;
     background: var(--surface-alt);
     box-shadow: inset 1px 1px 0 var(--chrome-shadow), inset -1px -1px 0 var(--chrome-hi);
+  }
+
+  .computer-shell .timeline-track .timeline-ad > * {
+    grid-column: 1;
   }
 
   .computer-shell .timeline-ad-copy {
@@ -7287,7 +7575,8 @@ select:focus-visible {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 4px;
+    gap: 3px;
+    padding-top: 10px;
     text-align: center;
   }
 
@@ -7315,8 +7604,10 @@ select:focus-visible {
   }
 
   .computer-shell .timeline-ad .timeline-controls {
+    width: 100%;
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2px;
   }
 
   .computer-shell .timeline-track .timeline-controls {
@@ -7331,7 +7622,9 @@ select:focus-visible {
   }
 
   .computer-shell .timeline-ad .timeline-controls button {
+    width: 100%;
     min-width: 0;
+    height: 24px;
     padding: 0;
   }
 
@@ -7443,6 +7736,24 @@ select:focus-visible {
     margin: 0 !important;
     padding: 0 6px;
     font-size: 8px;
+  }
+
+  .computer-shell .important-card-footer > button {
+    border: 0;
+    background: var(--chrome);
+    color: var(--ui-text);
+    box-shadow: inset 1px 1px 0 var(--chrome-hi), inset -1px -1px 0 var(--chrome-dark);
+    font: 700 8px/1 Tahoma, Arial, sans-serif;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .computer-shell .important-card-footer > button:hover,
+  .computer-shell .important-card-footer > button:focus-visible {
+    background: var(--selection-bg);
+    color: var(--selection-text);
+    outline: 1px dotted currentColor;
+    outline-offset: -4px;
   }
 
   .computer-shell .important-footage-card {
