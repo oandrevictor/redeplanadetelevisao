@@ -11,23 +11,23 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase: base,
     title: "Rede Plana de Televisão",
-    description: "Dirija um reality show dentro do computador antigo de uma emissora brasileira.",
+    description: "Dirija um reality show, monte cada episódio e acompanhe uma audiência ficcional que reage à edição, aos participantes e às histórias exibidas.",
     icons: {
       icon: "/favicon.svg",
       shortcut: "/favicon.svg",
     },
     openGraph: {
       title: "Rede Plana de Televisão",
-      description: "Você decide o que o Brasil vê.",
+      description: "Você decide o que o Brasil vê — e cada coorte reage ao seu corte.",
       type: "website",
       locale: "pt_BR",
-      images: [{ url: new URL("/og-retro.png", base), width: 1536, height: 1024, alt: "Rede Plana de Televisão em uma central de produção de TV com visual de computador dos anos 1990" }],
+      images: [{ url: new URL("/og-audience.png", base), width: 1536, height: 1024, alt: "Central de produção analógica da Rede Plana com monitores de audiência, retenção e transmissão ao vivo" }],
     },
     twitter: {
       card: "summary_large_image",
       title: "Rede Plana de Televisão",
-      description: "Você decide o que o Brasil vê.",
-      images: [new URL("/og-retro.png", base)],
+      description: "Você decide o que o Brasil vê — e cada coorte reage ao seu corte.",
+      images: [new URL("/og-audience.png", base)],
     },
   };
 }

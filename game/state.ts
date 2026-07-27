@@ -1,14 +1,26 @@
 import { cast } from "./content/cast";
+import { createInitialAudienceState } from "./audience/initial-state";
 import { createRng, nextRandom } from "./rng";
-import type { CharacterState, GameState, RelationshipKey, RelationshipState } from "./types";
+import type {
+  AudienceEngineMode,
+  CharacterState,
+  GameState,
+  RelationshipKey,
+  RelationshipState,
+} from "./types";
 
-export const SCHEMA_VERSION = 2;
-export const ENGINE_VERSION = "0.2.0";
-export const CATALOG_VERSION = "0.2.0";
+export const SCHEMA_VERSION = 3;
+export const ENGINE_VERSION = "0.3.0";
+export const CATALOG_VERSION = "0.3.0";
 
 const clamp = (value: number, minimum = 0, maximum = 100) => Math.min(maximum, Math.max(minimum, value));
 
-export function createInitialState(seed: string, mode: GameState["mode"] = "shadow"): GameState {
+export function createInitialState(
+  seed: string,
+  mode: GameState["mode"] = "shadow",
+  audienceMode: AudienceEngineMode =
+    mode === "legacy" ? "legacy" : mode === "shadow" ? "shadow" : "clustered",
+): GameState {
   let rng = createRng(seed);
   const characters: Record<string, CharacterState> = {};
   for (const profile of cast) {
@@ -54,6 +66,7 @@ export function createInitialState(seed: string, mode: GameState["mode"] = "shad
     },
     house: { eventHistory: [], generatedWindows: [] },
     narrative: { threads: {}, publicStorylines: {} },
+    audienceModel: createInitialAudienceState(cast.map((profile) => profile.id), audienceMode),
     broadcasts: [],
   };
 }

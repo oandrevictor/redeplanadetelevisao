@@ -87,8 +87,10 @@ test("source contains the complete playable season loop", async () => {
   assert.match(page, /const FEED_REFRESH_MS = 3500/);
   assert.match(page, /Atualização automática ativa/);
   assert.doesNotMatch(page, /Maior potencial|>potencial</i);
-  assert.match(page, /Quem deve sair\?/);
-  assert.match(page, /Quem deve vencer\?/);
+  assert.match(page, /CLOSE_AUDIENCE_VOTE/);
+  assert.match(page, /CLOSE_FINAL_VOTE/);
+  assert.match(page, /Consolidando o painel…/);
+  assert.match(page, /Os votos de todas as coortes foram consolidados/);
   assert.match(page, /activeParticipants\.length === 3/);
   assert.match(css, /prefers-reduced-motion/);
   assert.match(css, /\.computer-shell \.feed-entry > div:not\(\.feed-line\)/);
@@ -212,8 +214,12 @@ test("Edição uses the approved timeline, bank and persistent cut-state workspa
   assert.match(editorSource, /Inclua todos os cortes obrigatórios/);
   assert.match(editorSource, /Pronto para transmitir/);
   assert.match(editorSource, /!importantBlockInTimeline/);
-  assert.doesNotMatch(editorSource, /audiência prevista|AUDIÊNCIA|Parcialidade|Todos os lados|approach-tone/);
-  assert.match(page, /const liveAudience = Math\.round\(11 \+ \(predictedAudience - 11\)/);
+  assert.match(editorSource, /audience-forecast-card/);
+  assert.match(editorSource, /PREVISÃO DE AUDIÊNCIA/);
+  assert.match(editorSource, /ENQUADRAMENTO DO CORTE/);
+  assert.match(editorSource, /Perspectiva/);
+  assert.match(editorSource, /RISCO DE FADIGA \/ RETORNO/);
+  assert.match(page, /const liveAudience = currentCheckpoint\?\.rating \?\? storedResult\?\.forecast\.expected \?\? predictedAudience/);
 
   assert.match(css, /grid-template-columns:\s*minmax\(0, 81fr\) minmax\(200px, 19fr\)/);
   assert.match(css, /\.computer-shell \.timeline-track \.timeline-ad[\s\S]*?flex:\s*0 0 68px/);

@@ -355,7 +355,7 @@ test("changing a leader relationship changes the nomination target", () => {
 });
 
 test("elimination is immutable, resolves impossible threads, and preserves farewell footage", () => {
-  let state = command(createInitialState("aftermath", "dynamic"), { type: "START_SEASON", seed: "aftermath" });
+  let state = command(createInitialState("aftermath", "dynamic", "shadow"), { type: "START_SEASON", seed: "aftermath" });
   state = command(state, { type: "CONFIRM_CHALLENGE", challengeType: "atencao" });
   state = command(state, { type: "FORM_NOMINATION" });
   const eliminatedId = state.competition.nomineeIds[0];
@@ -381,7 +381,7 @@ test("elimination is immutable, resolves impossible threads, and preserves farew
 
 test("the third elimination transitions all survivors to finalists", () => {
   const state = (() => {
-    let current = command(createInitialState("final-transition", "dynamic"), {
+    let current = command(createInitialState("final-transition", "dynamic", "shadow"), {
       type: "START_SEASON",
       seed: "final-transition",
     });
@@ -453,7 +453,7 @@ test("versioned saves preserve action logs and migrate schema version one", () =
   delete legacy.snapshot.competition.eliminationHistory;
   delete legacy.snapshot.narrative.publicStorylines;
   const migrated = deserializeSeason(JSON.stringify(legacy));
-  assert.equal(migrated?.schemaVersion, 2);
+  assert.equal(migrated?.schemaVersion, 3);
   assert.deepEqual(migrated?.snapshot.competition.nominationHistory, []);
   assert.deepEqual(migrated?.snapshot.narrative.publicStorylines, {});
 });
@@ -528,7 +528,7 @@ test("future save versions fail safely and normal saves stay compact", () => {
 
 test("final editor receives speeches and retrospective footage", () => {
   const state = (() => {
-    let current = command(createInitialState("final-footage", "dynamic"), {
+    let current = command(createInitialState("final-footage", "dynamic", "shadow"), {
       type: "START_SEASON",
       seed: "final-footage",
     });

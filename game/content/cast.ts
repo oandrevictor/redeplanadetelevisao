@@ -16,6 +16,11 @@ export const cast: readonly CharacterProfile[] = [
     tags: ["magnética", "competitiva", "leal"], portrait: { x: "0%", y: "0%" },
     triggerKeys: ["called_fake", "ally_attacked"], behaviorKeys: ["retaliates_immediately", "protects_allies"],
     drives: { visibility: 5, belonging: 4, control: 3, fairness: 4, status: 5 },
+    audienceProfile: {
+      psychographicTags: { conflict: 0.8, competition: 0.9, authenticity: 0.7, representation: 0.8, spectacle: 0.9 },
+      publicIdentityTags: ["mulher", "27-anos", "nordeste", "salvador", "trabalho-noturno"],
+      representationTags: ["nordeste", "cultura-urbana", "empreendedorismo"],
+    },
   },
   {
     id: "bento", name: "Bento Farias", age: 31, city: "Campo Grande, MS", occupation: "Instrutor de montaria",
@@ -31,6 +36,11 @@ export const cast: readonly CharacterProfile[] = [
     tags: ["forte", "calmo", "teimoso"], portrait: { x: "50%", y: "0%" },
     triggerKeys: ["broken_word", "intelligence_questioned"], behaviorKeys: ["stores_resentment", "competes_intensely"],
     drives: { visibility: 2, belonging: 4, control: 3, fairness: 5, status: 3 },
+    audienceProfile: {
+      psychographicTags: { competition: 0.9, fairness: 0.9, authenticity: 0.8, vulnerability: 0.5, redemption: 0.6 },
+      publicIdentityTags: ["homem", "31-anos", "centro-oeste", "interior", "trabalho-rural"],
+      representationTags: ["interior", "trabalho-manual", "codigo-de-honra"],
+    },
   },
   {
     id: "celina", name: "Celina Prado", age: 42, city: "Belo Horizonte, MG", occupation: "Jornalista investigativa",
@@ -46,6 +56,11 @@ export const cast: readonly CharacterProfile[] = [
     tags: ["analítica", "reservada", "incisiva"], portrait: { x: "100%", y: "0%" },
     triggerKeys: ["caught_contradiction"], behaviorKeys: ["probes_inconsistency", "observes_before_acting"],
     drives: { visibility: 3, belonging: 2, control: 5, fairness: 4, status: 4 },
+    audienceProfile: {
+      psychographicTags: { strategy: 1, authenticity: 0.8, fairness: 0.7, conflict: 0.5, competition: 0.7 },
+      publicIdentityTags: ["mulher", "42-anos", "sudeste", "belo-horizonte", "jornalismo"],
+      representationTags: ["mulheres-40-plus", "carreira-intelectual", "estrategia"],
+    },
   },
   {
     id: "iago", name: "Iago Nunes", age: 24, city: "Guarulhos, SP", occupation: "Entregador por aplicativo",
@@ -61,6 +76,11 @@ export const cast: readonly CharacterProfile[] = [
     tags: ["sortudo", "engraçado", "impulsivo"], portrait: { x: "0%", y: "100%" },
     triggerKeys: ["cornered"], behaviorKeys: ["overpromises", "jokes_under_pressure"],
     drives: { visibility: 4, belonging: 5, control: 1, fairness: 2, status: 3 },
+    audienceProfile: {
+      psychographicTags: { humor: 1, spectacle: 0.8, redemption: 0.7, relationships: 0.7, authenticity: 0.5 },
+      publicIdentityTags: ["homem", "24-anos", "sudeste", "periferia-urbana", "trabalho-por-aplicativo"],
+      representationTags: ["juventude-periferica", "trabalho-por-aplicativo", "mobilidade-social"],
+    },
   },
   {
     id: "jussara", name: "Jussara Lima", age: 35, city: "Recife, PE", occupation: "Manicure e comediante",
@@ -76,6 +96,11 @@ export const cast: readonly CharacterProfile[] = [
     tags: ["hilária", "social", "imprevisível"], portrait: { x: "50%", y: "100%" },
     triggerKeys: ["excluded", "arrogance"], behaviorKeys: ["weaponizes_humor", "bridges_groups"],
     drives: { visibility: 5, belonging: 4, control: 3, fairness: 3, status: 4 },
+    audienceProfile: {
+      psychographicTags: { humor: 1, relationships: 0.9, authenticity: 0.8, representation: 0.9, conflict: 0.5 },
+      publicIdentityTags: ["mulher", "35-anos", "nordeste", "recife", "trabalho-autonomo"],
+      representationTags: ["nordeste", "mulher-trabalhadora", "humor-popular"],
+    },
   },
   {
     id: "ravi", name: "Ravi Barros", age: 29, city: "Florianópolis, SC", occupation: "Instrutor de surfe",
@@ -91,6 +116,11 @@ export const cast: readonly CharacterProfile[] = [
     tags: ["focado", "atlético", "cauteloso"], portrait: { x: "100%", y: "100%" },
     triggerKeys: ["trust_betrayed"], behaviorKeys: ["observes_before_acting", "competes_intensely"],
     drives: { visibility: 2, belonging: 3, control: 4, fairness: 4, status: 3 },
+    audienceProfile: {
+      psychographicTags: { competition: 0.9, strategy: 0.7, authenticity: 0.8, vulnerability: 0.6, relationships: 0.5 },
+      publicIdentityTags: ["homem", "29-anos", "sul", "litoral", "esporte"],
+      representationTags: ["litoral", "esporte", "vida-ao-ar-livre"],
+    },
   },
 ] as const;
 
