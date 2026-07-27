@@ -336,7 +336,7 @@ test("source contains the complete Important Event internal editing workflow", a
   assert.match(page, /Leitura provável do público/);
   assert.match(page, /Favorecido pela edição/);
   assert.match(page, /Prejudicado pela edição/);
-  assert.match(page, /Construção percebida/);
+  assert.match(page, /LEITURA ATUAL/);
   assert.match(page, /Contexto que não chega ao público/);
   assert.match(page, /MUDOU AGORA/);
   assert.match(page, /Rascunho salvo automaticamente/);
@@ -366,6 +366,12 @@ test("source contains the complete Important Event internal editing workflow", a
   assert.match(css, /\.computer-shell \.important-narrative-reading/);
   assert.match(css, /\.computer-shell \.important-version-track/);
   assert.match(css, /@keyframes important-reading-pulse/);
+  assert.match(css, /\.important-internal-body[\s\S]*?overflow:\s*auto/);
+  assert.match(css, /\.important-editor-story p[\s\S]*?font:\s*14px\/1\.42/);
+  assert.match(css, /\.important-version-track[\s\S]*?min-height:\s*104px/);
+  assert.match(css, /\.important-edit-beat-list > li[\s\S]*?min-height:\s*126px/);
+  assert.match(css, /grid-template-columns:\s*minmax\(0, 1fr\) minmax\(360px, 400px\)/);
+  assert.match(css, /\.important-internal-footer button[\s\S]*?min-width:\s*170px/);
 });
 
 test("Important Event timeline validation enforces two moments and the rigid 03:00 limit", () => {

@@ -2672,12 +2672,6 @@ export default function Home() {
                       <div><small>ANÁLISE AUTOMÁTICA</small><h3>Leitura provável do público</h3></div>
                       <span className="is-live">● AO VIVO</span>
                     </div>
-                    {importantReadingChange && (
-                      <article className="important-reading-change">
-                        <b>MUDOU AGORA</b>
-                        <p>{importantReadingChange}</p>
-                      </article>
-                    )}
                     <article className="important-current-reading">
                       <span>LEITURA ATUAL</span>
                       <strong>{importantEventConstructionLabels[editingImportantEdit.detectedEditorialConstruction]}</strong>
@@ -2706,15 +2700,17 @@ export default function Home() {
                           participantIds={editingImportantEdit.harmedParticipantIds}
                         />
                       </article>
-                      <article>
-                        <span>Construção percebida</span>
-                        <strong>{importantEventConstructionLabels[editingImportantEdit.detectedEditorialConstruction]}</strong>
-                      </article>
                       <article className="narrative-reading-wide narrative-reading-context">
                         <span>Contexto que não chega ao público</span>
                         <p>{editingImportantEdit.missingContextDescription}</p>
                       </article>
                     </div>
+                    {importantReadingChange && (
+                      <article className="important-reading-change">
+                        <b>MUDOU AGORA</b>
+                        <p>{importantReadingChange}</p>
+                      </article>
+                    )}
                   </section>
                 </aside>
               </div>
