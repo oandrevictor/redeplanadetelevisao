@@ -28,6 +28,7 @@ export function useGameEngine(
   );
   const { load, save, clear } = useSeasonSave();
   const actionLog = useRef<GameCommand[]>([]);
+  const resettingSeason = useRef(false);
   const ready = state.revision > 0;
 
   useEffect(() => {
@@ -44,7 +45,7 @@ export function useGameEngine(
   }, [load, seed]);
 
   useEffect(() => {
-    if (ready) save(state, actionLog.current);
+    if (ready && !resettingSeason.current) save(state, actionLog.current);
   }, [ready, save, state]);
 
   const dispatch = useCallback<Dispatch<GameCommand>>((command) => {
@@ -53,6 +54,8 @@ export function useGameEngine(
   }, []);
 
   const resetSeason = useCallback(() => {
+    resettingSeason.current = true;
+    actionLog.current = [];
     clear();
   }, [clear]);
 

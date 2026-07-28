@@ -87,10 +87,14 @@ function broadcastProvenanceError(state: GameState, episode: BroadcastEpisode): 
     const expectedEliminatedId = state.audienceModel.mode === "clustered"
       ? state.audienceModel.pendingVote?.kind === "elimination"
         ? state.audienceModel.pendingVote.selectedParticipantId
-        : null
+        : [...state.competition.eliminationHistory]
+          .reverse()
+          .find((result) => result.week === episode.week)?.eliminatedId ?? null
       : state.competition.nomineeIds.find(
         (participantId) => state.characters[participantId]?.flags.audienceResult === true,
-      ) ?? null;
+      ) ?? [...state.competition.eliminationHistory]
+        .reverse()
+        .find((result) => result.week === episode.week)?.eliminatedId ?? null;
     if (revealIds.length !== 1 || !expectedEliminatedId || revealIds[0] !== expectedEliminatedId) {
       return "An elimination broadcast must contain exactly one canonical reveal matching the locked result.";
     }
@@ -307,21 +311,18 @@ function appendNominationFootage(state: GameState): void {
   append(
     "anchor:nomination-result",
     selectActiveCast(state),
-    { leader: [result.leaderId], nominees: [result.leaderTargetId, result.houseTargetId] },
+    {
+      leader: [result.leaderId],
+      nominees: [result.leaderTargetId, result.houseTargetId],
+      voters: result.ballots.map((ballot) => ballot.voterId),
+      targets: [...new Set(result.ballots.map((ballot) => ballot.targetId))],
+    },
     `${castById[result.leaderTargetId].name.split(" ")[0]} e ${castById[result.houseTargetId].name.split(" ")[0]} estão na berlinda`,
-    `${castById[result.leaderId].name.split(" ")[0]} fez a indicação do líder e a casa completou a votação.`,
+    `${castById[result.leaderId].name.split(" ")[0]} fez a indicação do líder. Os votos da casa foram consolidados e definiram ${castById[result.houseTargetId].name.split(" ")[0]}.`,
     92,
   );
-  for (const ballot of result.ballots) {
-    append(
-      "anchor:house-ballot",
-      [ballot.voterId, ballot.targetId],
-      { voter: [ballot.voterId], target: [ballot.targetId] },
-      `${castById[ballot.voterId].name.split(" ")[0]} vota em ${castById[ballot.targetId].name.split(" ")[0]}`,
-      `O voto foi motivado por ${ballot.motiveTags.join(", ").replaceAll("_", " ")}.`,
-      72,
-    );
-  }
+  // Individual ballots remain in nominationHistory for rules and inspection;
+  // the feed receives only the consolidated nomination card above.
 }
 
 function eliminate(state: GameState, participantId: ParticipantId): CommandResult {
@@ -544,12 +545,6 @@ export function reduceGame(state: GameState, command: GameCommand): CommandResul
             break;
           }
           next.characters[authoritativeParticipantId].flags.audienceResult = true;
-          next.clock.window = "elimination";
-          appendEliminationFootage(
-            next,
-            authoritativeParticipantId,
-            next.competition.nomineeIds,
-          );
           result = { state: next };
         } catch (error) {
           result = invalid(state, error instanceof Error ? error.message : "Unable to close the audience vote.");

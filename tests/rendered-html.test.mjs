@@ -61,12 +61,15 @@ test("source contains the complete playable season loop", async () => {
 
   for (const phase of [
     "feedIntro",
+    "feedPostChallenge",
     "challenge",
     "editPremiere",
     "livePremiere",
     "feedParty",
     "editVote",
+    "feedNomination",
     "audienceVote",
+    "feedElimination",
     "editElimination",
     "weekSummary",
     "editFinal",
@@ -86,6 +89,7 @@ test("source contains the complete playable season loop", async () => {
   assert.match(page, /FECHAR CORTE E TRANSMITIR/);
   assert.match(page, /const FEED_REFRESH_MS = 3500/);
   assert.match(page, /Atualização automática ativa/);
+  assert.match(page, /const receivedItems = allFeedItems\.slice\(0, visibleFeedCount\)/);
   assert.doesNotMatch(page, /Maior potencial|>potencial</i);
   assert.match(page, /CLOSE_AUDIENCE_VOTE/);
   assert.match(page, /CLOSE_FINAL_VOTE/);
@@ -118,18 +122,22 @@ test("source contains the complete playable season loop", async () => {
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
 });
 
-test("the camera Feed exposes automatic sync, filters, selection and contextual details", async () => {
+test("the camera Feed exposes the complete synchronized source, filters, selection and contextual details", async () => {
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   const feedSource = page.slice(page.indexOf("function renderFeed()"), page.indexOf("function renderChallenge()"));
 
   assert.match(feedSource, /FEED DAS CÂMERAS/);
   assert.match(feedSource, /SINAL AO VIVO/);
-  assert.match(feedSource, /Atualização automática ativa/);
   assert.match(feedSource, /Feed sincronizado/);
+  assert.match(feedSource, /Atualização automática ativa/);
   assert.match(feedSource, /próximo registro em/);
   assert.doesNotMatch(feedSource, /Atualizar feed/);
+  assert.match(feedSource, /const receivedItems = allFeedItems\.slice\(0, visibleFeedCount\)/);
+  assert.match(page, /selectFeedBatch/);
+  assert.match(page, /feedVisibleCounts/);
   assert.match(feedSource, /4 de 8 câmeras/);
+  assert.doesNotMatch(feedSource, /\["current", "AGORA"/);
   assert.match(feedSource, /\["all", "TODOS"/);
   assert.match(feedSource, /\["important", "IMPORTANTES"/);
   assert.match(feedSource, /\["unseen", "NÃO VISTOS"/);
@@ -141,6 +149,17 @@ test("the camera Feed exposes automatic sync, filters, selection and contextual 
   assert.match(feedSource, /ABRIR ACONTECIMENTO/);
   assert.doesNotMatch(feedSource, /CRONOLOGIA|ORDEM CRONOLÓGICA|Sequência do acontecimento/);
   assert.match(feedSource, /Ir para edição do episódio/);
+  assert.match(page, /setPhase\("feedPostChallenge"\)/);
+  assert.match(page, /continueAfterPostChallengeFeed/);
+  assert.match(page, /openAudienceVoteAfterNomination/);
+  assert.match(page, /setPhase\("feedElimination"\)/);
+  assert.match(
+    page.slice(page.indexOf("function confirmChallenge()"), page.indexOf("function participantIdsForEditorEvent")),
+    /type: "SELECT_CHALLENGE"[\s\S]*startEdit\(week === 1 \? "editPremiere" : "editChallenge"\)/,
+  );
+  assert.match(page, /phase === "livePremiere"[\s\S]*type: "CONFIRM_CHALLENGE"/);
+  assert.match(page, /Ver repercussão da prova no feed/);
+  assert.match(page, /Continuar acompanhando a casa/);
   assert.doesNotMatch(feedSource, /Avançar 2 dias e editar episódio/);
   assert.doesNotMatch(feedSource, /Registro secundário · sem micro-história editável/);
   assert.match(css, /grid-template-columns:\s*minmax\(0, 64fr\) minmax\(260px, 36fr\)/);
@@ -162,6 +181,7 @@ test("PLIN can be dismissed and reopens when its message changes", async () => {
   assert.match(css, /\.computer-shell \.feed-footer > \.button[\s\S]*?margin-left:\s*12px/);
   assert.match(css, /\.computer-shell \.app-feed \.window-content \{\s*overflow:\s*hidden/);
   assert.match(css, /grid-template-rows:\s*auto auto minmax\(0, 1fr\) auto/);
+  assert.match(css, /\.computer-shell \.feed-log \{[\s\S]*?overflow-y:\s*auto/);
 });
 
 test("Edição uses the approved timeline, bank and persistent cut-state workspace", async () => {
@@ -270,11 +290,17 @@ test("Edição uses the approved timeline, bank and persistent cut-state workspa
 
 test("the player can restart from Week 1 and the development inspector stays hidden by default", async () => {
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const gameEngine = await readFile(new URL("../app/use-game-engine.ts", import.meta.url), "utf8");
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
 
   assert.match(page, /function restartSeason\(\)/);
   assert.match(page, /engineControls\.resetSeason\(\)/);
   assert.match(page, /window\.localStorage\.removeItem\(UI_SAVE_KEY\)/);
+  assert.match(page, /restartingSeason\.current = true/);
+  assert.match(page, /window\.location\.replace\(window\.location\.pathname\)/);
+  assert.match(gameEngine, /resettingSeason\.current = true/);
+  assert.match(gameEngine, /ready && !resettingSeason\.current/);
+  assert.match(page, /function begin\(\)[\s\S]*?setPhase\("email"\)[\s\S]*?setView\("mail"\)/);
   assert.match(page, /Recomeçar da Semana 1/);
   assert.match(page, /onClick=\{restartSeason\}/);
   assert.match(page, /NEXT_PUBLIC_SHOW_GAME_INSPECTOR === "true"/);

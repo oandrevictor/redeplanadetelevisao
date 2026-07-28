@@ -13,7 +13,8 @@ import {
   isRequiredEpisodeFootage,
   toEpisodeFootageView,
 } from "@/game/selectors/event-view";
-import { selectFeedEvents } from "@/game/selectors/feed";
+import { selectFeedBatch, selectFeedSource } from "@/game/selectors/feed";
+import { isStoryWindowReleased, selectReleasedEvents } from "@/game/selectors/released-events";
 import { selectLegacyAudienceVoteChoice } from "@/game/selectors/legacy-audience-vote";
 import type {
   BroadcastEpisode,
@@ -65,6 +66,7 @@ type FeedFilter = "all" | "important" | "unseen";
 type Phase =
   | "email"
   | "feedIntro"
+  | "feedPostChallenge"
   | "challenge"
   | "editPremiere"
   | "livePremiere"
@@ -75,7 +77,9 @@ type Phase =
   | "feedParty"
   | "editVote"
   | "liveVote"
+  | "feedNomination"
   | "audienceVote"
+  | "feedElimination"
   | "editElimination"
   | "liveElimination"
   | "weekSummary"
@@ -83,6 +87,32 @@ type Phase =
   | "liveFinal"
   | "winnerVote"
   | "winnerReveal";
+
+type FeedReleaseStage = "intro" | "postChallenge" | "party" | "nomination" | "elimination";
+
+const FEED_REFRESH_MS = 3500;
+
+function feedReleaseStageForPhase(phase: Phase): FeedReleaseStage {
+  if (
+    phase === "email"
+    || phase === "feedIntro"
+    || phase === "challenge"
+    || phase === "editPremiere"
+    || phase === "livePremiere"
+    || phase === "editChallenge"
+    || phase === "liveChallenge"
+  ) return "intro";
+  if (
+    phase === "feedPostChallenge"
+    || phase === "summaryPremiere"
+    || phase === "summaryChallenge"
+  ) {
+    return "postChallenge";
+  }
+  if (phase === "feedParty" || phase === "editVote" || phase === "liveVote") return "party";
+  if (phase === "feedNomination" || phase === "audienceVote") return "nomination";
+  return "elimination";
+}
 
 type Participant = {
   id: string;
@@ -183,8 +213,6 @@ type UiSeasonSave = {
   phase: Phase;
   view: AppView;
   windowOpen: boolean;
-  feedCount: number;
-  partyCount: number;
   challengeType: ChallengeType | null;
   leaderId: string | null;
   activeIds: string[];
@@ -192,6 +220,7 @@ type UiSeasonSave = {
   timeline: TimelineItem[];
   eventApproaches: Record<string, CutApproach>;
   importantEventEdits?: Record<string, ImportantEventEdit>;
+  feedVisibleCounts?: Record<string, number>;
   liveProgress: number;
   nominees: string[];
   audiencePick: string | null;
@@ -556,19 +585,30 @@ type FeedPresentationItem =
   | { kind: "important"; id: string; time: string; camera: string; chainId: string };
 
 function withWeekOneImportantEvent(items: FeedPresentationItem[]): FeedPresentationItem[] {
-  return weekOneImportantEventChain
-    ? [
-      ...items.slice(0, 3),
-      {
-        kind: "important",
-        id: `important-${weekOneImportantEventChain.id}`,
-        time: "02:04",
-        camera: "ARQUIVO · 5 CÂMERAS",
-        chainId: weekOneImportantEventChain.id,
-      },
-      ...items.slice(3),
-    ]
-    : items;
+  if (!weekOneImportantEventChain) return items;
+  const importantItem: FeedPresentationItem = {
+    kind: "important",
+    id: `important-${weekOneImportantEventChain.id}`,
+    time: "02:04",
+    camera: "ARQUIVO · 5 CÂMERAS",
+    chainId: weekOneImportantEventChain.id,
+  };
+  if (items.some((item) => item.id === importantItem.id)) return items;
+  const minutesSincePartyStart = (time: string) => {
+    const [hours, minutes] = time.split(":").map(Number);
+    return ((hours < 12 ? hours + 24 : hours) * 60) + minutes;
+  };
+  const insertionIndex = items.findIndex(
+    (item) => {
+      const hours = Number(item.time.split(":")[0]);
+      const belongsToPartyNight = hours >= 18 || hours < 6;
+      return belongsToPartyNight
+        && minutesSincePartyStart(item.time) > minutesSincePartyStart(importantItem.time);
+    },
+  );
+  return insertionIndex === -1
+    ? [...items, importantItem]
+    : [...items.slice(0, insertionIndex), importantItem, ...items.slice(insertionIndex)];
 }
 
 const importantEventRoleLabels: Record<ImportantEventBeatRole, string> = {
@@ -690,7 +730,6 @@ function importantAnalysisSignature(edit: ImportantEventEdit) {
   });
 }
 
-const FEED_REFRESH_MS = 3500;
 const UI_SAVE_KEY = "rede-plana-ui-season";
 
 function Avatar({
@@ -826,12 +865,9 @@ export default function Home() {
   const [pdfOpen, setPdfOpen] = useState(false);
   const [openImportantChainId, setOpenImportantChainId] = useState<string | null>(null);
   const [windowOpen, setWindowOpen] = useState(true);
-  const [feedCount, setFeedCount] = useState(0);
-  const [partyCount, setPartyCount] = useState(0);
   const [feedFilter, setFeedFilter] = useState<FeedFilter>("all");
   const [selectedFeedItemId, setSelectedFeedItemId] = useState<string | null>(null);
   const [seenFeedItemIds, setSeenFeedItemIds] = useState<Set<string>>(() => new Set());
-  const [feedCountdownMs, setFeedCountdownMs] = useState(FEED_REFRESH_MS);
   const [dismissedGuideMessage, setDismissedGuideMessage] = useState<string | null>(null);
   const [challengeType, setChallengeType] = useState<ChallengeType | null>(null);
   const [leaderId, setLeaderId] = useState<string | null>(null);
@@ -840,6 +876,8 @@ export default function Home() {
   const [timeline, setTimeline] = useState<TimelineItem[]>(adSlots);
   const [eventApproaches, setEventApproaches] = useState<Record<string, CutApproach>>({});
   const [importantEventEdits, setImportantEventEdits] = useState<Record<string, ImportantEventEdit>>({});
+  const [feedVisibleCounts, setFeedVisibleCounts] = useState<Record<string, number>>({});
+  const [feedSecondsRemaining, setFeedSecondsRemaining] = useState(Math.ceil(FEED_REFRESH_MS / 1000));
   const [editingImportantChainId, setEditingImportantChainId] = useState<string | null>(null);
   const [importantEditError, setImportantEditError] = useState("");
   const [draggedImportantBeatId, setDraggedImportantBeatId] = useState<string | null>(null);
@@ -858,6 +896,7 @@ export default function Home() {
   const [soundOn, setSoundOn] = useState(true);
   const [startMenuOpen, setStartMenuOpen] = useState(false);
   const uiSaveReady = useRef(false);
+  const restartingSeason = useRef(false);
   const importantReadingChangeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -879,8 +918,6 @@ export default function Home() {
         setPhase(saved.phase);
         setView(saved.view);
         setWindowOpen(saved.windowOpen);
-        setFeedCount(saved.feedCount);
-        setPartyCount(saved.partyCount);
         setChallengeType(saved.challengeType);
         setLeaderId(saved.leaderId);
         setActiveIds(saved.activeIds);
@@ -888,6 +925,7 @@ export default function Home() {
         setTimeline(saved.timeline);
         setEventApproaches(saved.eventApproaches);
         setImportantEventEdits(saved.importantEventEdits ?? {});
+        setFeedVisibleCounts(saved.feedVisibleCounts ?? {});
         setLiveProgress(saved.liveProgress);
         setNominees(saved.nominees);
         setAudiencePick(saved.audiencePick);
@@ -900,15 +938,13 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!uiSaveReady.current) return;
+    if (!uiSaveReady.current || restartingSeason.current) return;
     const saved: UiSeasonSave = {
       version: 1,
       started,
       phase,
       view,
       windowOpen,
-      feedCount,
-      partyCount,
       challengeType,
       leaderId,
       activeIds,
@@ -916,6 +952,7 @@ export default function Home() {
       timeline,
       eventApproaches,
       importantEventEdits,
+      feedVisibleCounts,
       liveProgress,
       nominees,
       audiencePick,
@@ -928,13 +965,12 @@ export default function Home() {
     audiencePick,
     challengeType,
     eventApproaches,
+    feedVisibleCounts,
     importantEventEdits,
-    feedCount,
     lastEliminatedId,
     leaderId,
     liveProgress,
     nominees,
-    partyCount,
     phase,
     started,
     timeline,
@@ -1065,29 +1101,104 @@ export default function Home() {
 
   const isEditPhase = phase === "editPremiere" || phase === "editChallenge" || phase === "editVote" || phase === "editElimination" || phase === "editFinal";
   const isLivePhase = phase === "livePremiere" || phase === "liveChallenge" || phase === "liveVote" || phase === "liveElimination" || phase === "liveFinal";
-  const dynamicIntroFeed = useMemo(
-    () => selectFeedEvents(shadowGameState, "arrival", 1),
+  const importantEventReleased = isStoryWindowReleased(shadowGameState, "party", 1);
+  const releasedCanonicalEvents = useMemo(
+    () => selectReleasedEvents(shadowGameState),
     [shadowGameState],
   );
-  const dynamicPartyFeed = useMemo(
-    () => selectFeedEvents(shadowGameState, "party", week),
-    [shadowGameState, week],
-  );
   const canonicalEventById = useMemo(
-    () => new Map(shadowGameState.house.eventHistory.map((event) => [event.id, event])),
-    [shadowGameState.house.eventHistory],
+    () => new Map(releasedCanonicalEvents.map((event) => [event.id, event])),
+    [releasedCanonicalEvents],
   );
+  const feedReleaseStage = feedReleaseStageForPhase(phase);
+  const feedStageKey = `${week}:${feedReleaseStage}`;
+  const allFeedItems = useMemo(() => {
+    const dynamicItems = selectFeedBatch(shadowGameState, feedReleaseStage, week);
+    const legacyItems = feedReleaseStage === "party"
+      || feedReleaseStage === "nomination"
+      || feedReleaseStage === "elimination"
+      ? partyFeed
+      : introFeed;
+    const sourceItems = selectFeedSource(dynamicItems, legacyItems, {
+      dynamicReady: engineControls.ready,
+      mode: shadowGameState.mode,
+      dynamicAuthoritative: true,
+    });
+    const secondaryItems: FeedPresentationItem[] = sourceItems.map((item) => ({ kind: "secondary", ...item }));
+    return week === 1
+      && importantEventReleased
+      && (feedReleaseStage === "party" || feedReleaseStage === "nomination" || feedReleaseStage === "elimination")
+      ? withWeekOneImportantEvent(secondaryItems)
+      : secondaryItems;
+  }, [
+    engineControls.ready,
+    feedReleaseStage,
+    importantEventReleased,
+    shadowGameState,
+    week,
+  ]);
+  const visibleFeedCount = Math.min(
+    allFeedItems.length,
+    feedVisibleCounts[feedStageKey] ?? 0,
+  );
+  const feedSynchronized = visibleFeedCount >= allFeedItems.length;
+  const hasAiredCurrentChallengeEpisode = shadowGameState.broadcasts.some((broadcast) =>
+    broadcast.week === week
+    && (!broadcast.episode || broadcast.episode.kind === (week === 1 ? "premiere" : "challenge")));
 
   useEffect(() => {
     if (
       !engineControls.ready
       || !uiSaveReady.current
-      || shadowGameState.audienceModel.mode === "legacy"
+      || phase !== "feedPostChallenge"
+      || hasAiredCurrentChallengeEpisode
     ) return;
-    const reconciled = reconcileTimelineWithCanonicalHistory(
-      timeline,
-      canonicalEventById.keys(),
-    );
+    const frame = window.requestAnimationFrame(() => {
+      setPhase(week === 1 ? "editPremiere" : "editChallenge");
+      setView("edit");
+      setWindowOpen(true);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [engineControls.ready, hasAiredCurrentChallengeEpisode, phase, week]);
+
+  useEffect(() => {
+    if (view !== "feed" || !windowOpen || feedSynchronized) return;
+    const revealStartedAt = Date.now();
+    const countdown = window.setInterval(() => {
+      const elapsedInCycle = (Date.now() - revealStartedAt) % FEED_REFRESH_MS;
+      const remainingMs = Math.max(0, FEED_REFRESH_MS - elapsedInCycle);
+      setFeedSecondsRemaining(Math.max(1, Math.ceil(remainingMs / 1000)));
+    }, 250);
+    const reveal = window.setInterval(() => {
+      setFeedVisibleCounts((current) => {
+        const currentCount = current[feedStageKey] ?? 0;
+        if (currentCount >= allFeedItems.length) return current;
+        return { ...current, [feedStageKey]: currentCount + 1 };
+      });
+    }, FEED_REFRESH_MS);
+    return () => {
+      window.clearInterval(countdown);
+      window.clearInterval(reveal);
+    };
+  }, [
+    allFeedItems.length,
+    feedStageKey,
+    feedSynchronized,
+    view,
+    windowOpen,
+  ]);
+
+  useEffect(() => {
+    if (
+      !engineControls.ready
+      || !uiSaveReady.current
+    ) return;
+    const releasedTimeline = importantEventReleased
+      ? timeline
+      : timeline.filter((item) => item.kind !== "important-event");
+    const reconciled = shadowGameState.audienceModel.mode === "legacy"
+      ? releasedTimeline
+      : reconcileTimelineWithCanonicalHistory(releasedTimeline, canonicalEventById.keys());
     if (reconciled === timeline) return;
     const frame = window.requestAnimationFrame(() => {
       setTimeline(reconciled);
@@ -1099,6 +1210,7 @@ export default function Home() {
   }, [
     canonicalEventById,
     engineControls.ready,
+    importantEventReleased,
     isEditPhase,
     shadowGameState.audienceModel.mode,
     timeline,
@@ -1309,11 +1421,18 @@ export default function Home() {
 
   function confirmChallenge() {
     if (!challengeType) return;
-    const command = { type: "CONFIRM_CHALLENGE", challengeType } as const;
+    const command = { type: "SELECT_CHALLENGE", challengeType } as const;
     const canonicalResult = reduceGame(shadowGameState, command);
+    if (canonicalResult.diagnostic) return;
     dispatchGame(command);
-    setLeaderId(canonicalResult.state.competition.leaderId);
     startEdit(week === 1 ? "editPremiere" : "editChallenge");
+  }
+
+  function continueAfterPostChallengeFeed() {
+    dispatchGame({ type: "START_PARTY" });
+    setPhase("feedParty");
+    setView("feed");
+    setWindowOpen(true);
   }
 
   function participantIdsForEditorEvent(event: RecordedEvent) {
@@ -1385,9 +1504,10 @@ export default function Home() {
   }
 
   function restartSeason() {
-    engineControls.resetSeason();
+    restartingSeason.current = true;
     window.localStorage.removeItem(UI_SAVE_KEY);
-    window.location.reload();
+    engineControls.resetSeason();
+    window.location.replace(window.location.pathname);
   }
 
   function moveImportantBeat(chainId: string, beatId: string, direction: -1 | 1) {
@@ -1572,24 +1692,20 @@ export default function Home() {
     }));
   }
 
-  function buildNominees() {
-    const candidates = activeParticipants.filter((participant) => participant.id !== leaderId);
-    const leaderChoice = [...candidates].sort((a, b) => a.traits.atencao - b.traits.atencao)[0];
-    const houseChoice = [...candidates]
-      .filter((participant) => participant.id !== leaderChoice?.id)
-      .sort((a, b) => a.traits.sorte - b.traits.sorte)[0];
-    return [leaderChoice?.id, houseChoice?.id].filter(Boolean) as string[];
+  function prepareVoteEdit() {
+    startEdit("editVote");
   }
 
-  function prepareVoteEdit() {
-    const command = { type: "FORM_NOMINATION" } as const;
+  function openAudienceVoteAfterNomination() {
+    const command = { type: "CLOSE_AUDIENCE_VOTE" } as const;
     const canonicalResult = reduceGame(shadowGameState, command);
-    const nextNominees = canonicalResult.diagnostic
-      ? buildNominees()
-      : canonicalResult.state.competition.nomineeIds;
-    if (!canonicalResult.diagnostic) dispatchGame(command);
-    setNominees(nextNominees);
-    startEdit("editVote");
+    if (canonicalResult.diagnostic) return;
+    dispatchGame(command);
+    const selectedId = canonicalResult.state.competition.nomineeIds.find(
+      (participantId) => canonicalResult.state.characters[participantId]?.flags.audienceResult === true,
+    ) ?? null;
+    setAudiencePick(selectedId);
+    showAudienceWorkflow("audienceVote");
   }
 
   function showAudienceWorkflow(
@@ -1605,39 +1721,40 @@ export default function Home() {
 
   function finishLive() {
     if (phase === "livePremiere") {
+      if (challengeType && !shadowGameState.competition.challengeHistory.some((result) => result.week === week)) {
+        const command = { type: "CONFIRM_CHALLENGE", challengeType } as const;
+        const canonicalResult = reduceGame(shadowGameState, command);
+        if (canonicalResult.diagnostic) return;
+        dispatchGame(command);
+        setLeaderId(canonicalResult.state.competition.leaderId);
+      }
       showAudienceWorkflow("summaryPremiere");
       return;
     }
     if (phase === "liveChallenge") {
+      if (challengeType && !shadowGameState.competition.challengeHistory.some((result) => result.week === week)) {
+        const command = { type: "CONFIRM_CHALLENGE", challengeType } as const;
+        const canonicalResult = reduceGame(shadowGameState, command);
+        if (canonicalResult.diagnostic) return;
+        dispatchGame(command);
+        setLeaderId(canonicalResult.state.competition.leaderId);
+      }
       showAudienceWorkflow("summaryChallenge");
       return;
     }
     if (phase === "liveVote") {
-      const command = { type: "CLOSE_AUDIENCE_VOTE" } as const;
+      const command = { type: "FORM_NOMINATION" } as const;
       const canonicalResult = reduceGame(shadowGameState, command);
       if (!canonicalResult.diagnostic) {
         dispatchGame(command);
-        const selectedId = canonicalResult.state.competition.nomineeIds.find(
-          (participantId) => canonicalResult.state.characters[participantId]?.flags.audienceResult === true,
-        ) ?? null;
-        setAudiencePick(selectedId);
+        setNominees(canonicalResult.state.competition.nomineeIds);
       }
-      showAudienceWorkflow("audienceVote");
+      setPhase("feedNomination");
+      setView("feed");
+      setWindowOpen(true);
       return;
     }
     if (phase === "liveElimination") {
-      const eliminatedId = shadowGameState.audienceModel.mode === "clustered"
-        && pendingAudienceVote?.kind === "elimination"
-        ? pendingAudienceVote.selectedParticipantId
-        : audiencePick ?? legacyEliminationChoice;
-      if (!eliminatedId) return;
-      dispatchGame(
-        shadowGameState.audienceModel.mode === "clustered"
-          ? { type: "RESOLVE_ELIMINATION" }
-          : { type: "RESOLVE_ELIMINATION", participantId: eliminatedId },
-      );
-      setLastEliminatedId(eliminatedId);
-      setActiveIds((current) => current.filter((id) => id !== eliminatedId));
       showAudienceWorkflow("weekSummary");
       return;
     }
@@ -1667,63 +1784,28 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLivePhase, liveProgress, phase]);
 
-  useEffect(() => {
-    if (view !== "feed" || !windowOpen) return;
-    const partyPhase =
-      phase === "feedParty"
-      || phase === "editVote"
-      || phase === "liveVote"
-      || phase === "audienceVote"
-      || phase === "editElimination"
-      || phase === "liveElimination"
-      || phase === "weekSummary";
-    const generatedCount = partyPhase ? dynamicPartyFeed.length : dynamicIntroFeed.length;
-    const legacyCount = partyPhase ? partyFeed.length : introFeed.length;
-    const baseItemCount = engineControls.ready && shadowGameState.mode === "dynamic" && generatedCount > 0
-      ? generatedCount
-      : legacyCount;
-    const itemCount = baseItemCount + (partyPhase && week === 1 && weekOneImportantEventChain ? 1 : 0);
-    const currentCount = partyPhase ? partyCount : feedCount;
-    if (currentCount >= itemCount) return;
-
-    const deadline = Date.now() + FEED_REFRESH_MS;
-    const updateCountdown = () => {
-      setFeedCountdownMs(Math.max(0, deadline - Date.now()));
-    };
-    const countdownFrame = window.requestAnimationFrame(updateCountdown);
-    const countdown = window.setInterval(updateCountdown, 200);
-    const timeout = window.setTimeout(() => {
-      if (partyPhase) {
-        setPartyCount((current) => Math.min(itemCount, current + 1));
-      } else {
-        setFeedCount((current) => Math.min(itemCount, current + 1));
-      }
-    }, FEED_REFRESH_MS);
-    return () => {
-      window.cancelAnimationFrame(countdownFrame);
-      window.clearInterval(countdown);
-      window.clearTimeout(timeout);
-    };
-  }, [
-    dynamicIntroFeed.length,
-    dynamicPartyFeed.length,
-    engineControls.ready,
-    feedCount,
-    partyCount,
-    phase,
-    shadowGameState.mode,
-    view,
-    week,
-    windowOpen,
-  ]);
-
   function confirmAudienceElimination() {
     if (
       shadowGameState.audienceModel.mode === "clustered"
       && (!pendingAudienceVote || pendingAudienceVote.kind !== "elimination")
     ) return;
     if (shadowGameState.audienceModel.mode !== "clustered" && !audiencePick && !legacyEliminationChoice) return;
-    startEdit("editElimination");
+    const eliminatedId = shadowGameState.audienceModel.mode === "clustered"
+      && pendingAudienceVote?.kind === "elimination"
+      ? pendingAudienceVote.selectedParticipantId
+      : audiencePick ?? legacyEliminationChoice;
+    if (!eliminatedId) return;
+    const command = shadowGameState.audienceModel.mode === "clustered"
+      ? { type: "RESOLVE_ELIMINATION" } as const
+      : { type: "RESOLVE_ELIMINATION", participantId: eliminatedId } as const;
+    const canonicalResult = reduceGame(shadowGameState, command);
+    if (canonicalResult.diagnostic) return;
+    dispatchGame(command);
+    setLastEliminatedId(eliminatedId);
+    setActiveIds((current) => current.filter((id) => id !== eliminatedId));
+    setPhase("feedElimination");
+    setView("feed");
+    setWindowOpen(true);
   }
 
   function nextWeek() {
@@ -1733,10 +1815,8 @@ export default function Home() {
     setLeaderId(null);
     setNominees([]);
     setAudiencePick(null);
-    setFeedCount(4);
-    setPartyCount(4);
-    setPhase("challenge");
-    setView("challenge");
+    setPhase("feedIntro");
+    setView("feed");
     setWindowOpen(true);
   }
 
@@ -1770,16 +1850,23 @@ export default function Home() {
       if (editorialAlerts.length > 0) return editorialAlerts.join(" ");
       return "O corte está dentro da faixa recomendada e sem pendências obrigatórias.";
     }
-    if (phase === "email" || phase === "feedIntro" && feedCount < introFeed.length) {
+    if (phase === "email") {
       return "Os personagens estao chegando na casa, abra o feed das cameras para dar uma olhada no que está acontecendo";
     }
+    if (phase === "feedPostChallenge") {
+      return "A prova terminou. Confira no feed o resultado e as reações antes de montar o episódio.";
+    }
     if (phase === "feedIntro" || phase === "challenge") {
-      return "O programa estreia hoje a noite com a primeira prova do lider. Qual vai ser a prova?";
+      return week === 1
+        ? "O programa estreia hoje a noite com a primeira prova do lider. Qual vai ser a prova?"
+        : `A semana ${week} começou. Confira os novos acontecimentos antes de definir a prova do líder.`;
     }
     if (phase === "summaryPremiere") return "Boa estreia. Volte ao feed: a casa não para quando a transmissão termina.";
     if (phase === "summaryChallenge") return "A nova liderança está definida. Volte ao feed para acompanhar as consequências.";
     if (phase === "feedParty") return "A festa rendeu. Daqui a dois dias, o episódio termina com a formação da votação.";
+    if (phase === "feedNomination") return "A casa votou. Confira a formação da berlinda antes de abrir a votação do público.";
     if (phase === "audienceVote") return "A votação está aberta. Agora o público decide quem deve sair.";
+    if (phase === "feedElimination") return "O resultado foi confirmado. Veja a eliminação no feed antes de montar o programa.";
     if (phase === "weekSummary") return activeParticipants.length === 3
       ? "Restam três. A próxima transmissão será a grande final."
       : `Semana ${week} encerrada. A próxima prova já está esperando.`;
@@ -1789,16 +1876,7 @@ export default function Home() {
   }
 
   function renderFeed() {
-    const isParty = phase === "feedParty" || phase === "editVote" || phase === "liveVote" || phase === "audienceVote" || phase === "editElimination" || phase === "liveElimination" || phase === "weekSummary";
-    const generatedItems = isParty ? dynamicPartyFeed : dynamicIntroFeed;
-    const legacyItems = isParty ? partyFeed : introFeed;
-    const sourceItems = engineControls.ready && shadowGameState.mode === "dynamic" && generatedItems.length > 0
-      ? generatedItems
-      : legacyItems;
-    const secondaryItems: FeedPresentationItem[] = sourceItems.map((item) => ({ kind: "secondary", ...item }));
-    const items = isParty && week === 1 ? withWeekOneImportantEvent(secondaryItems) : secondaryItems;
-    const count = isParty ? partyCount : feedCount;
-    const receivedItems = items.slice(0, Math.min(count, items.length));
+    const receivedItems = allFeedItems.slice(0, visibleFeedCount);
     const importantCount = receivedItems.filter((item) => item.kind === "important").length;
     const unseenCount = receivedItems.filter((item) => !seenFeedItemIds.has(item.id)).length;
     const filteredItems = receivedItems.filter((item) => {
@@ -1806,8 +1884,9 @@ export default function Home() {
       if (feedFilter === "unseen") return !seenFeedItemIds.has(item.id);
       return true;
     });
-    const selectedItem = receivedItems.find((item) => item.id === selectedFeedItemId)
-      ?? receivedItems.find((item) => item.kind === "important")
+    const selectedItem = filteredItems.find((item) => item.id === selectedFeedItemId)
+      ?? filteredItems.find((item) => item.kind === "important")
+      ?? filteredItems[0]
       ?? receivedItems[0]
       ?? null;
     const selectedImportantChain = selectedItem?.kind === "important"
@@ -1820,8 +1899,6 @@ export default function Home() {
       : selectedImportantChain?.participantIds
         .map((id) => participants.find((participant) => participant.id === id))
         .filter((participant): participant is Participant => Boolean(participant)) ?? [];
-    const isSynced = count >= items.length;
-    const nextRefreshSeconds = Math.max(1, Math.ceil(feedCountdownMs / 1000));
 
     function selectFeedItem(itemId: string) {
       setSelectedFeedItemId(itemId);
@@ -1838,14 +1915,21 @@ export default function Home() {
         <header className="feed-toolbar">
           <div className="feed-heading">
             <h2>FEED DAS CÂMERAS</h2>
-            <span>{isParty ? "Madrugada pós-festa" : "Chegada dos participantes"}</span>
+            <span>{feedReleaseStage === "party"
+              ? "Madrugada pós-festa"
+              : feedReleaseStage === "nomination"
+                ? "Votação da casa e formação da berlinda"
+                : feedReleaseStage === "elimination"
+                  ? "Resultado da eliminação e despedida"
+                  : feedReleaseStage === "postChallenge"
+                    ? "Resultado e repercussão da prova"
+                    : week === 1 ? "Chegada dos participantes" : `Início da semana ${week}`}</span>
           </div>
           <div className="live-chip"><i /> SINAL AO VIVO</div>
-          <div className={`feed-header-status${isSynced ? " is-synced" : " is-active"}`} role="status">
-            <b>{isSynced ? "Feed sincronizado" : "Atualização automática ativa"}</b>
-            {!isSynced && <span>próximo registro em 00:{String(nextRefreshSeconds).padStart(2, "0")}</span>}
+          <div className={`feed-header-status${feedSynchronized ? " is-synced" : ""}`} role="status">
+            <b>{feedSynchronized ? "Feed sincronizado" : "Atualização automática ativa"}</b>
           </div>
-          {isParty && <div className="feed-deadline">CORTE FECHA EM 2 DIAS</div>}
+          {feedReleaseStage === "party" && <div className="feed-deadline">CORTE FECHA EM 2 DIAS</div>}
         </header>
 
         <section className="camera-band" aria-labelledby="camera-band-title">
@@ -2031,26 +2115,40 @@ export default function Home() {
         </div>
 
         <footer className="feed-footer">
-          <span className={`status-note feed-auto-status${isSynced ? " is-synced" : " is-active"}`}>
-            {count}/{items.length} registros recebidos · {isSynced ? "Feed sincronizado" : "Atualização automática ativa"}
+          <span className={`status-note feed-auto-status${feedSynchronized ? " is-synced" : ""}`}>
+            {visibleFeedCount}/{allFeedItems.length} registros recebidos · {feedSynchronized
+              ? "Feed sincronizado"
+              : `próximo registro em 00:${String(feedSecondsRemaining).padStart(2, "0")}`}
           </span>
-          {isSynced && (isParty ? (
-            <button className="button button-primary" onClick={prepareVoteEdit} type="button">
+          {feedReleaseStage === "party" ? (
+            <button className="button button-primary" disabled={!feedSynchronized} onClick={prepareVoteEdit} type="button">
               Ir para edição do episódio
+            </button>
+          ) : phase === "feedNomination" ? (
+            <button className="button button-primary" disabled={!feedSynchronized} onClick={openAudienceVoteAfterNomination} type="button">
+              Abrir votação do público
+            </button>
+          ) : phase === "feedElimination" ? (
+            <button className="button button-primary" disabled={!feedSynchronized} onClick={() => startEdit("editElimination")} type="button">
+              Ir para edição da eliminação
+            </button>
+          ) : feedReleaseStage === "postChallenge" ? (
+            <button className="button button-primary" disabled={!feedSynchronized} onClick={continueAfterPostChallengeFeed} type="button">
+              Continuar acompanhando a casa
             </button>
           ) : (
             <button
               className="button button-primary"
+              disabled={!feedSynchronized}
               onClick={() => {
                 setPhase("challenge");
                 setView("challenge");
               }}
               type="button"
             >
-              Definir primeira prova do líder
+              {week === 1 ? "Definir primeira prova do líder" : "Definir prova do líder"}
             </button>
-          ))}
-          {!isSynced && <span className="feed-next-action-reason">A próxima etapa será liberada quando o Feed estiver sincronizado.</span>}
+          )}
         </footer>
       </div>
     );
@@ -2131,7 +2229,10 @@ export default function Home() {
     const importantBlockInTimeline = weekOneImportantEventChain
       ? timeline.some((item) => item.kind === "important-event" && item.chainId === weekOneImportantEventChain.id)
       : false;
-    const showImportantFootage = week === 1 && !importantBlockInTimeline && Boolean(weekOneImportantEventChain && importantCardEdit);
+    const showImportantFootage = week === 1
+      && importantEventReleased
+      && !importantBlockInTimeline
+      && Boolean(weekOneImportantEventChain && importantCardEdit);
     const transmissionBlocked = eventCount < 2 || missingRequiredEvents.length > 0;
     const transmissionStatus = eventCount < 2
       ? "Inclua pelo menos dois acontecimentos."
@@ -2470,14 +2571,13 @@ export default function Home() {
             <button
               className="button button-primary"
               onClick={() => {
-                dispatchGame({ type: "START_PARTY" });
-                setPhase("feedParty");
+                setPhase("feedPostChallenge");
                 setView("feed");
                 setWindowOpen(true);
               }}
               type="button"
             >
-              Voltar ao feed da casa
+              Ver repercussão da prova no feed
             </button>
           </footer>
         </section>

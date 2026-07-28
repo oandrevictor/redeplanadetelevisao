@@ -31,10 +31,10 @@ export function isRequiredEpisodeFootage(
   episodeKind: EpisodeKind,
 ): boolean {
   if (episodeKind === "premiere" || episodeKind === "challenge") {
-    return event.templateId === "anchor:challenge-result";
+    return false;
   }
   if (episodeKind === "vote") {
-    return event.templateId === "anchor:nomination-result";
+    return false;
   }
   if (episodeKind === "elimination") {
     return event.templateId === "anchor:elimination-result"

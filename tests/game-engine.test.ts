@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { cast, validateCast } from "../game/content/cast";
 import { eventTemplates } from "../game/content/templates/index";
+import { AUDIENCE_SCHEDULES } from "../game/audience/catalog";
 import { checkConstraints } from "../game/engine/constraints";
 import { enumerateCandidates } from "../game/engine/enumerate";
 import { instantiateEvent } from "../game/engine/instantiate";
@@ -14,13 +15,13 @@ import { selectActiveCast } from "../game/selectors/active-cast";
 import { selectAvailableFootage } from "../game/selectors/episode-bank";
 import {
   isRequiredEpisodeFootage,
-  toEpisodeFootageView,
 } from "../game/selectors/event-view";
 import { selectAudienceForecast } from "../game/selectors/audience-forecast";
-import { selectFeedEvents } from "../game/selectors/feed";
+import { selectFeedBatch, selectFeedEvents, selectFeedSource, selectReleasedFeedEvents } from "../game/selectors/feed";
+import { isStoryWindowReleased, selectReleasedEvents } from "../game/selectors/released-events";
 import { simulateSeasons } from "../game/simulator";
 import { createInitialState } from "../game/state";
-import type { ChallengeType, GameState } from "../game/types";
+import type { ChallengeType, EpisodeKind, GameState } from "../game/types";
 import {
   buildEditorialAlerts,
   classifyDuration,
@@ -160,6 +161,46 @@ function command(state: GameState, value: Parameters<typeof reduceGame>[1]): Gam
   return result.state;
 }
 
+function stateWithArrivalFeed(count: number, seed = `feed-${count}`): GameState {
+  const state = command(createInitialState(seed, "dynamic"), { type: "START_SEASON", seed });
+  const base = state.house.eventHistory.find((event) => event.window === "arrival");
+  assert.ok(base);
+  state.house.eventHistory = Array.from({ length: count }, (_, index) => ({
+    ...structuredClone(base),
+    id: `feed-event-${String(index + 1).padStart(2, "0")}`,
+    sequence: index + 1,
+    occurredAt: { ...base.occurredAt, tick: index + 1, week: 1 },
+    title: `Registro ${index + 1}`,
+    sourceEventIds: [],
+    sourceThreadIds: [],
+  }));
+  state.clock.tick = Math.max(state.clock.tick, count + 1);
+  return state;
+}
+
+function markEpisodeAired(state: GameState, kind: EpisodeKind, week = state.clock.week): GameState {
+  const next = structuredClone(state);
+  next.broadcasts.push({
+    week,
+    cuts: [],
+    audienceForecast: 0,
+    episode: {
+      id: `aired-${week}-${kind}`,
+      week,
+      kind,
+      schedule: AUDIENCE_SCHEDULES[kind],
+      segments: [{
+        id: `aired-${week}-${kind}-break`,
+        kind: "commercial",
+        title: "Intervalo",
+        durationSeconds: 60,
+        breakNumber: 1,
+      }],
+    },
+  });
+  return next;
+}
+
 function playSeason(seed: string): GameState {
   let state = command(createInitialState(seed), { type: "START_SEASON", seed });
   const challengeTypes: ChallengeType[] = ["resistencia", "sorte", "atencao"];
@@ -244,6 +285,226 @@ test("arrival and party queues are generated once and selectors never reroll", (
   assert.notDeepEqual(party.map((entry) => entry.title), arrival.map((entry) => entry.title));
 });
 
+test("feed selector returns zero eligible events", () => {
+  assert.deepEqual(selectFeedEvents(stateWithArrivalFeed(0), "arrival", 1), []);
+});
+
+for (const count of [1, 4, 5, 12]) {
+  test(`feed selector returns all ${count} eligible events without a visual cap`, () => {
+    const feed = selectFeedEvents(stateWithArrivalFeed(count), "arrival", 1);
+    assert.equal(feed.length, count);
+    assert.deepEqual(feed.map((item) => item.title), Array.from({ length: count }, (_, index) => `Registro ${index + 1}`));
+  });
+}
+
+test("feed selector restores chronological order from event sequence", () => {
+  const state = stateWithArrivalFeed(5);
+  state.house.eventHistory = [
+    state.house.eventHistory[3],
+    state.house.eventHistory[0],
+    state.house.eventHistory[4],
+    state.house.eventHistory[1],
+    state.house.eventHistory[2],
+  ];
+  assert.deepEqual(
+    selectFeedEvents(state, "arrival", 1).map((item) => item.id),
+    ["feed-event-01", "feed-event-02", "feed-event-03", "feed-event-04", "feed-event-05"],
+  );
+});
+
+test("feed selector does not duplicate an event id", () => {
+  const state = stateWithArrivalFeed(5);
+  state.house.eventHistory.splice(3, 0, structuredClone(state.house.eventHistory[2]));
+  const feed = selectFeedEvents(state, "arrival", 1);
+  assert.equal(feed.length, 5);
+  assert.equal(new Set(feed.map((item) => item.id)).size, feed.length);
+});
+
+test("feed preserves quantity and order after save and reload", () => {
+  const state = stateWithArrivalFeed(12, "feed-persistence");
+  const before = selectFeedEvents(state, "arrival", 1);
+  const restored = deserializeSeason(serializeSeason(state));
+  assert.ok(restored);
+  assert.deepEqual(selectFeedEvents(restored.snapshot, "arrival", 1), before);
+});
+
+test("dynamic feed uses every generated entry instead of the legacy replacement", () => {
+  const dynamicItems = selectFeedEvents(stateWithArrivalFeed(10), "arrival", 1);
+  const legacyItems = dynamicItems.slice(0, 4).map((item, index) => ({ ...item, id: `legacy-${index}` }));
+  const selected = selectFeedSource(dynamicItems, legacyItems, { dynamicReady: true, mode: "dynamic" });
+  assert.deepEqual(selected, dynamicItems);
+});
+
+test("legacy feed remains available in legacy mode and as a true dynamic fallback", () => {
+  const legacyItems = [
+    { id: "legacy-1" },
+    { id: "legacy-2" },
+    { id: "legacy-3" },
+    { id: "legacy-4" },
+  ];
+  const dynamicItems = [{ id: "dynamic-1" }, { id: "dynamic-2" }];
+  assert.deepEqual(
+    selectFeedSource(dynamicItems, legacyItems, { dynamicReady: true, mode: "legacy" }),
+    legacyItems,
+  );
+  assert.deepEqual(
+    selectFeedSource([], legacyItems, { dynamicReady: true, mode: "dynamic" }),
+    legacyItems,
+  );
+});
+
+test("feed source removes duplicate ids without changing the first occurrence order", () => {
+  const items = [{ id: "one" }, { id: "two" }, { id: "one" }, { id: "three" }];
+  assert.deepEqual(
+    selectFeedSource(items, [], { dynamicReady: true, mode: "dynamic" }).map((item) => item.id),
+    ["one", "two", "three"],
+  );
+});
+
+test("events from future weeks and other windows remain absent", () => {
+  const state = stateWithArrivalFeed(5);
+  const future = structuredClone(state.house.eventHistory[0]);
+  future.id = "future-event";
+  future.sequence = 6;
+  future.occurredAt.week = 2;
+  const otherWindow = structuredClone(state.house.eventHistory[1]);
+  otherWindow.id = "party-event";
+  otherWindow.sequence = 7;
+  otherWindow.window = "party";
+  state.house.eventHistory.push(future, otherWindow);
+  assert.deepEqual(
+    selectFeedEvents(state, "arrival", 1).map((item) => item.id),
+    ["feed-event-01", "feed-event-02", "feed-event-03", "feed-event-04", "feed-event-05"],
+  );
+});
+
+test("future material is absent from the canonical release source, feed, and episode bank", () => {
+  const state = stateWithArrivalFeed(1, "future-release");
+  const future = structuredClone(state.house.eventHistory[0]);
+  future.id = "future-release-event";
+  future.sequence = 2;
+  future.occurredAt = { ...future.occurredAt, tick: state.clock.tick + 10, week: 2 };
+  state.house.eventHistory.push(future);
+  assert.ok(!selectReleasedEvents(state).some((event) => event.id === future.id));
+  assert.ok(!selectFeedEvents(state, "arrival", 1).some((event) => event.id === future.id));
+  assert.ok(!selectAvailableFootage(state, { week: 2, episodeKind: "premiere" })
+    .some((event) => event.id === future.id));
+});
+
+test("occurred and released material is shared by feed and a compatible episode bank", () => {
+  const state = stateWithArrivalFeed(5, "shared-release");
+  const feedIds = selectFeedEvents(state, "arrival", 1).map((event) => event.id);
+  const bankIds = selectAvailableFootage(state, { week: 1, episodeKind: "premiere" }).map((event) => event.id);
+  assert.deepEqual(bankIds, feedIds);
+});
+
+test("released material remains unavailable to an incompatible episode type", () => {
+  const state = stateWithArrivalFeed(5, "incompatible-release");
+  assert.equal(selectAvailableFootage(state, { week: 1, episodeKind: "challenge" }).length, 0);
+  assert.equal(selectAvailableFootage(state, { week: 1, episodeKind: "vote" }).length, 0);
+  assert.equal(selectAvailableFootage(state, { week: 1, episodeKind: "elimination" }).length, 0);
+  assert.equal(selectAvailableFootage(state, { week: 1, episodeKind: "final" }).length, 0);
+});
+
+test("results enter the feed only after their episode and never leak into a later editor bank", () => {
+  let state = command(createInitialState("released-anchors", "dynamic", "legacy"), {
+    type: "START_SEASON",
+    seed: "released-anchors",
+  });
+  state = command(state, { type: "CONFIRM_CHALLENGE", challengeType: "atencao" });
+  const challengeAnchor = state.house.eventHistory.find((event) => event.templateId === "anchor:challenge-result");
+  assert.ok(challengeAnchor);
+  assert.equal(selectFeedBatch(state, "postChallenge", 1).length, 0);
+  assert.ok(!selectAvailableFootage(state, { week: 1, episodeKind: "premiere" })
+    .some((event) => event.id === challengeAnchor.id));
+  state = markEpisodeAired(state, "premiere", 1);
+  assert.ok(selectFeedBatch(state, "postChallenge", 1)
+    .some((event) => event.id === challengeAnchor.id));
+  assert.ok(!selectAvailableFootage(state, { week: 1, episodeKind: "challenge" })
+    .some((event) => event.id === challengeAnchor.id));
+  assert.ok(!selectAvailableFootage(state, { week: 1, episodeKind: "vote" })
+    .some((event) => event.id === challengeAnchor.id));
+
+  state = markEpisodeAired(state, "vote", 1);
+  state = command(state, { type: "FORM_NOMINATION" });
+  const nominationAnchor = state.house.eventHistory.find((event) => event.templateId === "anchor:nomination-result");
+  assert.ok(nominationAnchor);
+  assert.ok(!selectAvailableFootage(state, { week: 1, episodeKind: "vote" })
+    .some((event) => event.id === nominationAnchor.id));
+  assert.ok(selectFeedBatch(state, "nomination", 1)
+    .some((event) => event.id === nominationAnchor.id));
+  assert.ok(!selectAvailableFootage(state, { week: 1, episodeKind: "elimination" })
+    .some((event) => event.id === nominationAnchor.id));
+  assert.ok(!selectAvailableFootage(state, { week: 1, episodeKind: "premiere" })
+    .some((event) => event.id === nominationAnchor.id));
+});
+
+test("more than four released items remain eligible independent of viewport visibility", () => {
+  const state = stateWithArrivalFeed(12, "released-overflow");
+  const released = selectReleasedEvents(state, { week: 1 });
+  const bank = selectAvailableFootage(state, { week: 1, episodeKind: "premiere" });
+  assert.equal(released.length, 12);
+  assert.equal(bank.length, 12);
+  assert.deepEqual(bank.map((event) => event.id), released.map((event) => event.id));
+});
+
+test("released availability persists with stable order and no duplicates", () => {
+  const state = stateWithArrivalFeed(12, "released-persistence");
+  const restored = deserializeSeason(serializeSeason(state));
+  assert.ok(restored);
+  const before = selectReleasedEvents(state).map((event) => event.id);
+  const after = selectReleasedEvents(restored.snapshot).map((event) => event.id);
+  assert.deepEqual(after, before);
+  assert.equal(new Set(after).size, after.length);
+});
+
+test("legacy editor material remains available only through the compatibility path", () => {
+  const canonical = [{ id: "canonical" }];
+  const legacy = [{ id: "legacy-1" }, { id: "legacy-2" }];
+  assert.deepEqual(
+    selectEditorEpisodeBank(canonical, legacy, { requiresCanonicalHistory: false, dynamicEngine: false }),
+    legacy,
+  );
+  assert.deepEqual(
+    selectEditorEpisodeBank(canonical, legacy, { requiresCanonicalHistory: true, dynamicEngine: true }),
+    canonical,
+  );
+});
+
+test("important-event availability follows the canonical party window release", () => {
+  let state = command(createInitialState("important-release", "dynamic", "legacy"), {
+    type: "START_SEASON",
+    seed: "important-release",
+  });
+  assert.equal(isStoryWindowReleased(state, "party", 1), false);
+  state = command(state, { type: "CONFIRM_CHALLENGE", challengeType: "sorte" });
+  assert.equal(isStoryWindowReleased(state, "party", 1), false);
+  state = command(state, { type: "START_PARTY" });
+  assert.equal(isStoryWindowReleased(state, "party", 1), true);
+});
+
+test("episode filters consume the same released chronology for every episode kind", () => {
+  const state = playSeason("released-episode-filters");
+  const allowed = {
+    premiere: new Set(["arrival"]),
+    challenge: new Set(["pre_challenge"]),
+    vote: new Set(["party", "campaign"]),
+    elimination: new Set(["elimination", "post_elimination"]),
+    final: new Set(["final"]),
+  } as const;
+  for (const [episodeKind, windows] of Object.entries(allowed)) {
+    const footage = selectAvailableFootage(state, {
+      week: episodeKind === "premiere" ? 1 : state.clock.week,
+      episodeKind: episodeKind as keyof typeof allowed,
+    });
+    assert.ok(footage.every((event) => windows.has(event.window as never)));
+    assert.deepEqual(
+      footage.map((event) => event.sequence),
+      [...footage].map((event) => event.sequence).sort((left, right) => left - right),
+    );
+  }
+});
+
 test("story windows do not repeat a template and party gossip does not imply shared microphone audio", () => {
   const gossip = eventTemplates.find((template) => template.id === "party-open-mic");
   assert.ok(gossip);
@@ -276,9 +537,10 @@ test("episode bank uses unique event instances and preserves frozen historical a
   let state = command(createInitialState("footage", "dynamic"), { type: "START_SEASON", seed: "footage" });
   state = command(state, { type: "CONFIRM_CHALLENGE", challengeType: "sorte" });
   const premiere = selectAvailableFootage(state, { week: 1, episodeKind: "premiere" });
-  assert.ok(premiere.length >= 7);
+  assert.equal(premiere.length, selectFeedBatch(state, "intro", 1).length);
   assert.equal(new Set(premiere.map((event) => event.id)).size, premiere.length);
-  assert.ok(premiere.some((event) => event.templateId === "anchor:challenge-result"));
+  assert.ok(premiere.every((event) => event.window === "arrival"));
+  assert.ok(!premiere.some((event) => event.templateId === "anchor:challenge-result"));
   const excluded = premiere[0].id;
   assert.ok(!selectAvailableFootage(state, {
     week: 1,
@@ -292,7 +554,7 @@ test("episode bank uses unique event instances and preserves frozen historical a
     .some((event) => event.actorIds.includes(historicalActor)));
 });
 
-test("editor requirements are episode-scoped and individual ballots stay optional", () => {
+test("editor requirements are episode-scoped and house voting stays consolidated", () => {
   let state = command(
     createInitialState("episode-requirements", "dynamic", "legacy"),
     { type: "START_SEASON", seed: "episode-requirements" },
@@ -306,29 +568,25 @@ test("editor requirements are episode-scoped and individual ballots stay optiona
   const nomination = state.house.eventHistory.find(
     (event) => event.templateId === "anchor:nomination-result",
   );
-  const ballot = state.house.eventHistory.find(
-    (event) => event.templateId === "anchor:house-ballot",
-  );
   assert.ok(challenge);
   assert.ok(nomination);
-  assert.ok(ballot);
+  assert.equal(state.house.eventHistory.filter(
+    (event) => event.templateId === "anchor:house-ballot",
+  ).length, 0);
 
   const eliminationResult = { ...nomination, templateId: "anchor:elimination-result" };
   const farewell = { ...nomination, templateId: "anchor:farewell" };
   const finalistSpeech = { ...nomination, templateId: "anchor:finalist-speech" };
   const retrospective = { ...nomination, templateId: "anchor:season-retrospective" };
 
-  assert.equal(isRequiredEpisodeFootage(challenge, "premiere"), true);
-  assert.equal(isRequiredEpisodeFootage(challenge, "challenge"), true);
-  assert.equal(isRequiredEpisodeFootage(nomination, "vote"), true);
-  assert.equal(isRequiredEpisodeFootage(ballot, "vote"), false);
+  assert.equal(isRequiredEpisodeFootage(challenge, "premiere"), false);
+  assert.equal(isRequiredEpisodeFootage(challenge, "challenge"), false);
+  assert.equal(isRequiredEpisodeFootage(nomination, "vote"), false);
   assert.equal(isRequiredEpisodeFootage(nomination, "elimination"), false);
-  assert.equal(isRequiredEpisodeFootage(ballot, "elimination"), false);
   assert.equal(isRequiredEpisodeFootage(eliminationResult, "elimination"), true);
   assert.equal(isRequiredEpisodeFootage(farewell, "elimination"), true);
   assert.equal(isRequiredEpisodeFootage(finalistSpeech, "final"), true);
   assert.equal(isRequiredEpisodeFootage(retrospective, "final"), true);
-  assert.equal(toEpisodeFootageView(ballot, "elimination").requiredAnchor, false);
 });
 
 test("serialized saves restore the exact event queue and RNG state", () => {
@@ -379,12 +637,13 @@ test("challenge aptitude helps without making one contestant deterministic", () 
   assert.ok(Math.max(...wins.values()) < 250);
 });
 
-test("later challenge episodes exclude premiere arrival footage", () => {
+test("later challenge editors receive exactly the new pre-challenge feed batch", () => {
   const state = playSeason("weekly-challenge");
   const weekTwo = selectAvailableFootage(state, { week: 2, episodeKind: "challenge" });
-  assert.ok(weekTwo.length >= 4);
-  assert.ok(weekTwo.every((event) => event.occurredAt.week === 2 && event.window === "post_challenge"));
-  assert.ok(weekTwo.some((event) => event.templateId === "anchor:challenge-result"));
+  const weekTwoFeed = selectFeedBatch(state, "intro", 2);
+  assert.deepEqual(weekTwo.map((event) => event.id), weekTwoFeed.map((event) => event.id));
+  assert.ok(weekTwo.every((event) => event.occurredAt.week === 2 && event.window === "pre_challenge"));
+  assert.ok(!weekTwo.some((event) => event.templateId === "anchor:challenge-result"));
 });
 
 test("nominations store individual relationship-driven ballots and editable motives", () => {
@@ -407,12 +666,55 @@ test("nominations store individual relationship-driven ballots and editable moti
     Object.values(nomination.totals).reduce((sum, total) => sum + total, 0),
     nomination.ballots.length,
   );
-  const ballotFootage = selectAvailableFootage(state, { week: 1, episodeKind: "elimination" })
-    .filter((event) => event.templateId === "anchor:house-ballot");
-  assert.equal(ballotFootage.length, nomination.ballots.length);
-  assert.ok(ballotFootage.every(
-    (event) => !toEpisodeFootageView(event, "elimination").requiredAnchor,
+  const nominationFootage = selectAvailableFootage(state, { week: 1, episodeKind: "elimination" })
+    .filter((event) => event.templateId === "anchor:nomination-result");
+  assert.equal(nominationFootage.length, 0);
+});
+
+test("nomination and elimination footage are released only after their canonical moments", () => {
+  let state = command(
+    createInitialState("chronological-release", "dynamic", "legacy"),
+    { type: "START_SEASON", seed: "chronological-release" },
+  );
+  state = command(state, { type: "CONFIRM_CHALLENGE", challengeType: "atencao" });
+  state = command(state, { type: "START_PARTY" });
+
+  assert.equal(state.competition.nomineeIds.length, 0);
+  assert.ok(!selectReleasedFeedEvents(state).some((event) => state.house.eventHistory.some(
+    (instance) => instance.id === event.eventInstanceId && instance.templateId === "anchor:nomination-result",
+  )));
+  assert.ok(selectAvailableFootage(state, { week: 1, episodeKind: "vote" })
+    .every((event) => event.window === "party" || event.window === "campaign"));
+
+  state = markEpisodeAired(state, "vote", 1);
+  state = command(state, { type: "FORM_NOMINATION" });
+  const nominationCards = selectReleasedFeedEvents(state)
+    .filter((event) => state.house.eventHistory.some(
+      (instance) => instance.id === event.eventInstanceId && instance.templateId === "anchor:nomination-result",
+    ));
+  assert.equal(nominationCards.length, 1);
+  assert.equal(state.house.eventHistory.filter(
+    (event) => event.templateId === "anchor:house-ballot",
+  ).length, 0);
+  assert.ok(!selectAvailableFootage(state, { week: 1, episodeKind: "vote" })
+    .some((event) => event.window === "post_nomination"));
+  assert.ok(!selectAvailableFootage(state, { week: 1, episodeKind: "elimination" })
+    .some((event) => event.window === "post_nomination"));
+
+  state = command(state, { type: "CLOSE_AUDIENCE_VOTE" });
+  assert.ok(!selectReleasedFeedEvents(state).some(
+    (event) => event.eventInstanceId && state.house.eventHistory.find(
+      (instance) => instance.id === event.eventInstanceId && instance.templateId === "anchor:elimination-result",
+    ),
   ));
+  state = command(state, { type: "RESOLVE_ELIMINATION" });
+  assert.equal(state.house.eventHistory.filter(
+    (event) => event.templateId === "anchor:elimination-result",
+  ).length, 1);
+  const eliminationFeed = selectFeedBatch(state, "elimination", 1);
+  const eliminationBank = selectAvailableFootage(state, { week: 1, episodeKind: "elimination" });
+  assert.deepEqual(eliminationBank.map((event) => event.id), eliminationFeed.map((event) => event.id));
+  assert.ok(eliminationBank.some((event) => event.templateId === "anchor:elimination-result"));
 });
 
 test("changing a leader relationship changes the nomination target", () => {

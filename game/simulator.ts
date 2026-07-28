@@ -418,19 +418,19 @@ function simulateOne(seed: string, strategy: SimulationStrategy, latencies: numb
       latencies,
     );
     state = runCommand(state, { type: "START_PARTY" }, latencies);
-    state = runCommand(state, { type: "FORM_NOMINATION" }, latencies);
     state = runCommand(
       state,
       { type: "AIR_EPISODE", episode: buildSimulationEpisode(state, strategy, "vote") },
       latencies,
     );
+    state = runCommand(state, { type: "FORM_NOMINATION" }, latencies);
     state = runCommand(state, { type: "CLOSE_AUDIENCE_VOTE" }, latencies);
+    state = runCommand(state, { type: "RESOLVE_ELIMINATION" }, latencies);
     state = runCommand(
       state,
       { type: "AIR_EPISODE", episode: buildSimulationEpisode(state, strategy, "elimination") },
       latencies,
     );
-    state = runCommand(state, { type: "RESOLVE_ELIMINATION" }, latencies);
     if (selectActiveCast(state).length > 3) {
       state = runCommand(state, { type: "ADVANCE_WEEK" }, latencies);
     }
