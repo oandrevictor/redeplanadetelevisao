@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cast } from "@/game/content/cast";
 import { recordedEvents as extractedRecordedEvents } from "@/game/content/legacy-events";
 import {
@@ -8,16 +8,26 @@ import {
   partyFeed as extractedPartyFeed,
 } from "@/game/content/legacy-feed";
 import { reduceGame } from "@/game/reducer";
-import { selectAudienceForecast } from "@/game/selectors/audience-forecast";
 import { selectAvailableFootage } from "@/game/selectors/episode-bank";
-import { toFootageView } from "@/game/selectors/event-view";
+import {
+  isRequiredEpisodeFootage,
+  toEpisodeFootageView,
+} from "@/game/selectors/event-view";
 import { selectFeedEvents } from "@/game/selectors/feed";
+import { selectLegacyAudienceVoteChoice } from "@/game/selectors/legacy-audience-vote";
 import type {
+  BroadcastEpisode,
+  BroadcastSegment,
   ChallengeType as DomainChallengeType,
+  EpisodeKind,
+  AudiencePortrayal,
   PersonalityTrait as DomainPersonalityTrait,
   TraitScore as DomainTraitScore,
 } from "@/game/types";
+import { deriveAudienceSignals } from "@/game/audience/signals";
+import { AUDIENCE_SCHEDULES } from "@/game/audience/catalog";
 import { GameInspector } from "./game-inspector";
+import { AudienceReport } from "./audience-report";
 import { useGameEngine } from "./use-game-engine";
 import {
   EDITOR_DURATION_CONFIG,
@@ -28,7 +38,9 @@ import {
   classifyVariety,
   insertIntoFirstEmptyProgramZone,
   moveTimelineItem,
+  reconcileTimelineWithCanonicalHistory,
   removeEditorialTimelineItem,
+  selectEditorEpisodeBank,
   validateEditorCut,
 } from "./editor-analysis";
 
@@ -47,7 +59,7 @@ import {
   validateImportantEventVersion,
 } from "./important-event-analysis";
 import { generateWeekEvents, WEEK_ONE_SEED } from "./important-event-generation";
-type AppView = "mail" | "feed" | "challenge" | "edit";
+type AppView = "mail" | "feed" | "challenge" | "edit" | "audience";
 type Theme = "light" | "dark";
 type FeedFilter = "all" | "important" | "unseen";
 type Phase =
@@ -111,6 +123,47 @@ type CutApproach = {
   perspectiveIds: string[];
   tone: CutTone;
 };
+
+function episodeKindForPhase(phase: Phase): EpisodeKind {
+  if (phase === "editPremiere" || phase === "livePremiere" || phase === "summaryPremiere") {
+    return "premiere";
+  }
+  if (phase === "editChallenge" || phase === "liveChallenge" || phase === "summaryChallenge") {
+    return "challenge";
+  }
+  if (phase === "editVote" || phase === "liveVote" || phase === "audienceVote") return "vote";
+  if (phase === "editElimination" || phase === "liveElimination" || phase === "weekSummary") {
+    return "elimination";
+  }
+  return "final";
+}
+
+function portrayalsForCut(
+  participantIds: string[],
+  perspectiveIds: string[],
+  tone: CutTone,
+): Partial<Record<string, AudiencePortrayal[]>> {
+  const focused: Record<CutTone, AudiencePortrayal[]> = {
+    neutro: ["neutral"],
+    engracado: ["sympathetic"],
+    triste: ["vulnerable", "sympathetic"],
+    malicioso: ["dishonest", "contradictory"],
+    conflituoso: ["aggressive"],
+    emocional: ["vulnerable", "sympathetic"],
+  };
+  const background: Record<CutTone, AudiencePortrayal[]> = {
+    neutro: ["neutral"],
+    engracado: ["neutral"],
+    triste: ["defensive"],
+    malicioso: ["defensive"],
+    conflituoso: ["defensive"],
+    emocional: ["neutral"],
+  };
+  return Object.fromEntries(participantIds.map((id) => [
+    id,
+    perspectiveIds.includes(id) ? focused[tone] : background[tone],
+  ]));
+}
 
 type TimelineItem =
   | { id: string; kind: "ad"; title: string; duration: 4 }
@@ -756,7 +809,16 @@ function RestartGameControl({ onConfirm }: { onConfirm: () => void }) {
 
 export default function Home() {
   const engineMode = process.env.NEXT_PUBLIC_EVENT_ENGINE_MODE === "legacy" ? "legacy" : "dynamic";
-  const [shadowGameState, dispatchGame, engineControls] = useGameEngine("rede-plana-dynamic-v1", engineMode);
+  const audienceMode = process.env.NEXT_PUBLIC_AUDIENCE_ENGINE_MODE === "legacy"
+    ? "legacy"
+    : process.env.NEXT_PUBLIC_AUDIENCE_ENGINE_MODE === "shadow"
+      ? "shadow"
+      : "clustered";
+  const [shadowGameState, dispatchGame, engineControls] = useGameEngine(
+    "rede-plana-dynamic-v1",
+    engineMode,
+    audienceMode,
+  );
   const [theme, setTheme] = useState<Theme>("light");
   const [started, setStarted] = useState(false);
   const [phase, setPhase] = useState<Phase>("email");
@@ -925,10 +987,41 @@ export default function Home() {
     () => participants.filter((participant) => activeIds.includes(participant.id)),
     [activeIds],
   );
+  const involvedIdsFor = useCallback((event: RecordedEvent) => {
+    if (event.actorIds?.length) return event.actorIds;
+    const configuredIds = eventParticipantIds[event.id] ?? allParticipantIds;
+    const activeInvolvedIds = configuredIds.filter((id) => activeIds.includes(id));
+    return activeInvolvedIds.length > 0 ? activeInvolvedIds : activeIds;
+  }, [activeIds]);
 
   const leader = participants.find((participant) => participant.id === leaderId) ?? null;
   const lastEliminated = participants.find((participant) => participant.id === lastEliminatedId) ?? null;
   const winner = participants.find((participant) => participant.id === winnerId) ?? null;
+  const pendingAudienceVote = shadowGameState.audienceModel.pendingVote;
+  const latestEliminationVote = [...shadowGameState.audienceModel.voteHistory]
+    .reverse()
+    .find((vote) => vote.kind === "elimination" && vote.week === week);
+  const latestFinalVote = [...shadowGameState.audienceModel.voteHistory]
+    .reverse()
+    .find((vote) => vote.kind === "final");
+  const legacyEliminationChoice = selectLegacyAudienceVoteChoice(
+    shadowGameState,
+    "elimination",
+    shadowGameState.competition.nomineeIds,
+  );
+  const legacyFinalChoice = selectLegacyAudienceVoteChoice(
+    shadowGameState,
+    "final",
+    activeIds,
+  );
+  const audienceBroadcasts = shadowGameState.broadcasts.filter((broadcast) => Boolean(broadcast.result));
+  const latestAudienceBroadcast = audienceBroadcasts.at(-1) ?? null;
+  const latestAudienceResult = latestAudienceBroadcast?.result ?? null;
+  const currentWeekAudienceBroadcasts = audienceBroadcasts.filter((broadcast) => broadcast.week === week);
+  const seasonPeakRating = audienceBroadcasts.reduce(
+    (peak, broadcast) => Math.max(peak, broadcast.result?.peakRating ?? 0),
+    0,
+  );
   const latestChallengeResult = [...shadowGameState.competition.challengeHistory]
     .reverse()
     .find((result) => result.week === week) ?? null;
@@ -980,14 +1073,36 @@ export default function Home() {
     () => selectFeedEvents(shadowGameState, "party", week),
     [shadowGameState, week],
   );
-  const generatedFootage = useMemo(
-    () => shadowGameState.house.eventHistory.map(toFootageView),
-    [shadowGameState],
+  const canonicalEventById = useMemo(
+    () => new Map(shadowGameState.house.eventHistory.map((event) => [event.id, event])),
+    [shadowGameState.house.eventHistory],
   );
-  const editorEventCatalog = useMemo<RecordedEvent[]>(
-    () => [...recordedEvents, ...generatedFootage],
-    [generatedFootage],
-  );
+
+  useEffect(() => {
+    if (
+      !engineControls.ready
+      || !uiSaveReady.current
+      || shadowGameState.audienceModel.mode === "legacy"
+    ) return;
+    const reconciled = reconcileTimelineWithCanonicalHistory(
+      timeline,
+      canonicalEventById.keys(),
+    );
+    if (reconciled === timeline) return;
+    const frame = window.requestAnimationFrame(() => {
+      setTimeline(reconciled);
+      if (isEditPhase) {
+        setEditorError("Um bloco antigo sem gravação canônica foi removido. Escolha outro acontecimento do banco.");
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [
+    canonicalEventById,
+    engineControls.ready,
+    isEditPhase,
+    shadowGameState.audienceModel.mode,
+    timeline,
+  ]);
 
   const episodeBankEvents = useMemo(() => {
     const episodeKind =
@@ -1001,7 +1116,7 @@ export default function Home() {
       week,
       episodeKind,
       excludedInstanceIds: selectedIds,
-    }).map(toFootageView);
+    }).map((event) => toEpisodeFootageView(event, episodeKind));
     const ids =
       phase === "editPremiere"
         ? ["chegadas", "mala-trocada", "pacto-varanda", "cafe-sem-acucar", "prova-lider", "confessionario"]
@@ -1014,10 +1129,13 @@ export default function Home() {
             : ["melhores-semana", "festa-neon", "prova-lider", "discursos-final", "confessionario"];
 
     const dynamicEpisode = phase === "editPremiere" || phase === "editChallenge" || phase === "editVote" || phase === "editElimination" || phase === "editFinal";
-    const events: RecordedEvent[] = dynamicEpisode && shadowGameState.mode === "dynamic" && dynamicEvents.length >= 2
-      ? dynamicEvents
-      : secondaryEvents.filter((event) => ids.includes(event.id) && !selectedIds.has(event.id));
-    return events;
+    const legacyEvents = secondaryEvents.filter(
+      (event) => ids.includes(event.id) && !selectedIds.has(event.id),
+    );
+    return selectEditorEpisodeBank<RecordedEvent>(dynamicEvents, legacyEvents, {
+      requiresCanonicalHistory: shadowGameState.audienceModel.mode !== "legacy",
+      dynamicEngine: dynamicEpisode && shadowGameState.mode === "dynamic",
+    });
   }, [phase, timeline, shadowGameState, week]);
 
   const availableEvents = useMemo(() => {
@@ -1036,8 +1154,14 @@ export default function Home() {
   );
   const eventCount = timeline.filter((item) => item.kind === "event" || item.kind === "important-event").length;
   const selectedEventIds = new Set(timeline.filter((item) => item.kind === "event").map((item) => item.id));
+  const isRequiredForCurrentEdit = (event: Pick<RecordedEvent, "id" | "requiredAnchor">) => {
+    const canonicalEvent = canonicalEventById.get(event.id);
+    return canonicalEvent
+      ? isRequiredEpisodeFootage(canonicalEvent, episodeKindForPhase(phase))
+      : Boolean(event.requiredAnchor);
+  };
   const requiredEventCatalog = [...timeline.filter((item): item is TimelineItem & { kind: "event" } => item.kind === "event"), ...episodeBankEvents]
-    .filter((event) => event.requiredAnchor)
+    .filter(isRequiredForCurrentEdit)
     .filter((event, index, events) => events.findIndex((candidate) => candidate.id === event.id) === index)
     .map((event) => ({ id: event.id, title: event.title, included: selectedEventIds.has(event.id) }));
   const missingRequiredEvents = requiredEventCatalog.filter((event) => !event.included);
@@ -1057,6 +1181,83 @@ export default function Home() {
         .flatMap((beat) => beat.participantIds))]),
   (id) => participants.find((participant) => participant.id === id)?.name.split(" ")[0] ?? id);
   const editorialAlerts = buildEditorialAlerts(durationReading, focusReading, varietyReading, rhythmReading);
+  const plannedEpisode = useMemo<BroadcastEpisode>(() => {
+    const kind = episodeKindForPhase(phase);
+    const segments = timeline.map<BroadcastSegment>((item, index) => {
+      if (item.kind === "ad") {
+        return {
+          id: item.id,
+          kind: "commercial",
+          title: item.title,
+          durationSeconds: item.duration * 60,
+          breakNumber: Number.parseInt(item.id.replace(/\D+/g, ""), 10) || index + 1,
+        };
+      }
+      if (item.kind === "important-event") {
+        const selectedBeatIds = item.edit.televisedOrder.filter((id) => item.edit.selectedBeatIds.includes(id));
+        const selectedBeats = weekOneImportantEventBeats.filter((beat) => selectedBeatIds.includes(beat.id));
+        const participantIds = [...new Set(selectedBeats.flatMap((beat) => beat.participantIds))];
+        const contextCompleteness = item.edit.detectedEditorialConstruction === "full_context" ? 1
+          : item.edit.detectedEditorialConstruction === "balanced_cut" ? 0.86
+            : item.edit.detectedEditorialConstruction === "speech_comparison" ? 0.72
+              : item.edit.detectedEditorialConstruction === "unilateral_version" ? 0.55
+                : item.edit.detectedEditorialConstruction === "fragmented_conflict" ? 0.42
+                  : 0.32;
+        const portrayals: Partial<Record<string, AudiencePortrayal[]>> = {};
+        for (const id of participantIds) portrayals[id] = ["neutral"];
+        for (const id of item.edit.favoredParticipantIds) portrayals[id] = ["sympathetic", "justified"];
+        for (const id of item.edit.harmedParticipantIds) portrayals[id] = ["aggressive", "contradictory"];
+        return {
+          id: item.id,
+          kind: "important_event",
+          title: item.title,
+          durationSeconds: item.edit.finalDurationSeconds,
+          chainId: item.chainId,
+          sourceBeatIds: selectedBeatIds,
+          participantIds,
+          favoredParticipantIds: [...item.edit.favoredParticipantIds],
+          harmedParticipantIds: [...item.edit.harmedParticipantIds],
+          signals: {
+            conflict: 0.9,
+            relationships: 0.72,
+            authenticity: contextCompleteness,
+            fairness: item.edit.detectedEditorialConstruction === "full_context" ? 0.86 : 0.45,
+            vulnerability: 0.65,
+          },
+          portrayals,
+          contextCompleteness,
+          storylineHook: 0.9,
+        };
+      }
+      const canonicalEvent = canonicalEventById.get(item.id);
+      const participantIds = involvedIdsFor(item);
+      return {
+        id: item.id,
+        kind: "content",
+        title: item.title,
+        durationSeconds: item.duration * 60,
+        sourceEventId: item.id,
+        participantIds,
+        perspectiveIds: [...item.approach.perspectiveIds],
+        tone: item.approach.tone,
+        signals: canonicalEvent?.audienceSignals ?? deriveAudienceSignals(item.category),
+        portrayals: portrayalsForCut(participantIds, item.approach.perspectiveIds, item.approach.tone),
+        contextCompleteness: item.approach.perspectiveIds.length < participantIds.length ? 0.58 : 0.82,
+        storylineHook: Math.max(0.2, Math.min(1, item.heat / 100)),
+        revealsEliminatedParticipantId: kind === "elimination"
+          && canonicalEvent?.templateId === "anchor:elimination-result"
+          ? canonicalEvent.roleBindings.eliminated?.[0]
+          : undefined,
+      };
+    });
+    return {
+      id: `${shadowGameState.seasonId}:w${week}:${kind}`,
+      week,
+      kind,
+      schedule: { ...AUDIENCE_SCHEDULES[kind] },
+      segments,
+    };
+  }, [canonicalEventById, involvedIdsFor, phase, shadowGameState.seasonId, timeline, week]);
   const plannedCuts = useMemo(() => {
     const knownEventIds = new Set(shadowGameState.house.eventHistory.map((event) => event.id));
     return timeline
@@ -1067,8 +1268,6 @@ export default function Home() {
         tone: item.approach.tone,
       }));
   }, [shadowGameState.house.eventHistory, timeline]);
-  const predictedAudience = selectAudienceForecast(shadowGameState, plannedCuts).points;
-
   function begin() {
     setStarted(true);
     setPhase("email");
@@ -1115,13 +1314,6 @@ export default function Home() {
     dispatchGame(command);
     setLeaderId(canonicalResult.state.competition.leaderId);
     startEdit(week === 1 ? "editPremiere" : "editChallenge");
-  }
-
-  function involvedIdsFor(event: RecordedEvent) {
-    if (event.actorIds?.length) return event.actorIds;
-    const configuredIds = eventParticipantIds[event.id] ?? allParticipantIds;
-    const activeInvolvedIds = configuredIds.filter((id) => activeIds.includes(id));
-    return activeInvolvedIds.length > 0 ? activeInvolvedIds : activeIds;
   }
 
   function participantIdsForEditorEvent(event: RecordedEvent) {
@@ -1279,10 +1471,33 @@ export default function Home() {
     setTimeline((current) => moveTimelineItem(current, index, direction));
   }
 
+  function updateEventApproach(id: string, update: Partial<CutApproach>) {
+    const existingItem = timeline.find(
+      (item): item is Extract<TimelineItem, { kind: "event" }> => item.kind === "event" && item.id === id,
+    );
+    setTimeline((current) => current.map((item) => {
+      if (item.kind !== "event" || item.id !== id) return item;
+      const approach = { ...item.approach, ...update };
+      return { ...item, approach };
+    }));
+    setEventApproaches((current) => ({
+      ...current,
+      [id]: {
+        perspectiveIds: update.perspectiveIds
+          ?? existingItem?.approach.perspectiveIds
+          ?? [],
+        tone: update.tone
+          ?? existingItem?.approach.tone
+          ?? "neutro",
+      },
+    }));
+    setEditorError("");
+  }
+
   function dropOnTimeline(targetIndex?: number) {
     if (!dragged) return;
     if (dragged.source === "bank") {
-      const event = editorEventCatalog.find((item) => item.id === dragged.id);
+      const event = episodeBankEvents.find((item) => item.id === dragged.id);
       if (!event || timeline.some((item) => item.id === event.id)) return;
       setTimeline((current) => {
         const next = [...current];
@@ -1314,7 +1529,28 @@ export default function Home() {
       setEditorError(validationError);
       return;
     }
-    if (plannedCuts.length > 0) dispatchGame({ type: "BROADCAST_EPISODE", cuts: plannedCuts });
+    const hasProgramContent = plannedEpisode.segments.some((segment) => segment.kind !== "commercial");
+    if (hasProgramContent) {
+      if (shadowGameState.audienceModel.mode === "legacy") {
+        if (plannedCuts.length > 0) {
+          const command = { type: "BROADCAST_EPISODE", cuts: plannedCuts } as const;
+          const canonicalResult = reduceGame(shadowGameState, command);
+          if (canonicalResult.diagnostic) {
+            setEditorError(canonicalResult.diagnostic);
+            return;
+          }
+          dispatchGame(command);
+        }
+      } else {
+        const command = { type: "AIR_EPISODE", episode: plannedEpisode } as const;
+        const canonicalResult = reduceGame(shadowGameState, command);
+        if (canonicalResult.diagnostic) {
+          setEditorError(canonicalResult.diagnostic);
+          return;
+        }
+        dispatchGame(command);
+      }
+    }
     setLiveProgress(0);
     if (phase === "editPremiere") setPhase("livePremiere");
     if (phase === "editChallenge") setPhase("liveChallenge");
@@ -1345,43 +1581,78 @@ export default function Home() {
     return [leaderChoice?.id, houseChoice?.id].filter(Boolean) as string[];
   }
 
+  function prepareVoteEdit() {
+    const command = { type: "FORM_NOMINATION" } as const;
+    const canonicalResult = reduceGame(shadowGameState, command);
+    const nextNominees = canonicalResult.diagnostic
+      ? buildNominees()
+      : canonicalResult.state.competition.nomineeIds;
+    if (!canonicalResult.diagnostic) dispatchGame(command);
+    setNominees(nextNominees);
+    startEdit("editVote");
+  }
+
+  function showAudienceWorkflow(
+    nextPhase: Extract<
+      Phase,
+      "summaryPremiere" | "summaryChallenge" | "audienceVote" | "weekSummary" | "winnerVote"
+    >,
+  ) {
+    setPhase(nextPhase);
+    setView("audience");
+    setWindowOpen(true);
+  }
+
   function finishLive() {
     if (phase === "livePremiere") {
-      setPhase("summaryPremiere");
+      showAudienceWorkflow("summaryPremiere");
       return;
     }
     if (phase === "liveChallenge") {
-      setPhase("summaryChallenge");
+      showAudienceWorkflow("summaryChallenge");
       return;
     }
     if (phase === "liveVote") {
-      const command = { type: "FORM_NOMINATION" } as const;
+      const command = { type: "CLOSE_AUDIENCE_VOTE" } as const;
       const canonicalResult = reduceGame(shadowGameState, command);
-      const nextNominees = canonicalResult.diagnostic
-        ? buildNominees()
-        : canonicalResult.state.competition.nomineeIds;
-      if (!canonicalResult.diagnostic) dispatchGame(command);
-      setNominees(nextNominees);
-      setAudiencePick(null);
-      setPhase("audienceVote");
+      if (!canonicalResult.diagnostic) {
+        dispatchGame(command);
+        const selectedId = canonicalResult.state.competition.nomineeIds.find(
+          (participantId) => canonicalResult.state.characters[participantId]?.flags.audienceResult === true,
+        ) ?? null;
+        setAudiencePick(selectedId);
+      }
+      showAudienceWorkflow("audienceVote");
       return;
     }
     if (phase === "liveElimination") {
-      if (!audiencePick) return;
-      dispatchGame({ type: "RESOLVE_ELIMINATION", participantId: audiencePick });
-      setLastEliminatedId(audiencePick);
-      setActiveIds((current) => current.filter((id) => id !== audiencePick));
-      setPhase("weekSummary");
+      const eliminatedId = shadowGameState.audienceModel.mode === "clustered"
+        && pendingAudienceVote?.kind === "elimination"
+        ? pendingAudienceVote.selectedParticipantId
+        : audiencePick ?? legacyEliminationChoice;
+      if (!eliminatedId) return;
+      dispatchGame(
+        shadowGameState.audienceModel.mode === "clustered"
+          ? { type: "RESOLVE_ELIMINATION" }
+          : { type: "RESOLVE_ELIMINATION", participantId: eliminatedId },
+      );
+      setLastEliminatedId(eliminatedId);
+      setActiveIds((current) => current.filter((id) => id !== eliminatedId));
+      showAudienceWorkflow("weekSummary");
       return;
     }
     if (phase === "liveFinal") {
-      setAudiencePick(null);
-      setPhase("winnerVote");
+      dispatchGame({ type: "CLOSE_FINAL_VOTE" });
+      showAudienceWorkflow("winnerVote");
     }
   }
 
   useEffect(() => {
     if (!isLivePhase) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const frame = window.requestAnimationFrame(() => setLiveProgress(100));
+      return () => window.cancelAnimationFrame(frame);
+    }
     const interval = window.setInterval(() => {
       setLiveProgress((current) => Math.min(100, current + 4));
     }, 120);
@@ -1447,8 +1718,11 @@ export default function Home() {
   ]);
 
   function confirmAudienceElimination() {
-    if (!audiencePick) return;
-    dispatchGame({ type: "REGISTER_AUDIENCE_RESULT", participantId: audiencePick });
+    if (
+      shadowGameState.audienceModel.mode === "clustered"
+      && (!pendingAudienceVote || pendingAudienceVote.kind !== "elimination")
+    ) return;
+    if (shadowGameState.audienceModel.mode !== "clustered" && !audiencePick && !legacyEliminationChoice) return;
     startEdit("editElimination");
   }
 
@@ -1467,9 +1741,16 @@ export default function Home() {
   }
 
   function voteWinner() {
-    if (!audiencePick) return;
-    dispatchGame({ type: "RESOLVE_FINAL", winnerId: audiencePick });
-    setWinnerId(audiencePick);
+    const selectedWinnerId = shadowGameState.audienceModel.mode === "clustered"
+      ? pendingAudienceVote?.kind === "final" ? pendingAudienceVote.selectedParticipantId : null
+      : legacyFinalChoice;
+    if (!selectedWinnerId) return;
+    dispatchGame(
+      shadowGameState.audienceModel.mode === "clustered"
+        ? { type: "RESOLVE_FINAL" }
+        : { type: "RESOLVE_FINAL", winnerId: selectedWinnerId },
+    );
+    setWinnerId(selectedWinnerId);
     setPhase("winnerReveal");
   }
 
@@ -1495,18 +1776,14 @@ export default function Home() {
     if (phase === "feedIntro" || phase === "challenge") {
       return "O programa estreia hoje a noite com a primeira prova do lider. Qual vai ser a prova?";
     }
-    if (phase === "editPremiere") return "Agora é hora de escolher os cortes do programa.";
-    if (phase === "editChallenge") return "Monte o episódio semanal da prova e mostre como a nova liderança mexeu com a casa.";
     if (phase === "summaryPremiere") return "Boa estreia. Volte ao feed: a casa não para quando a transmissão termina.";
     if (phase === "summaryChallenge") return "A nova liderança está definida. Volte ao feed para acompanhar as consequências.";
     if (phase === "feedParty") return "A festa rendeu. Daqui a dois dias, o episódio termina com a formação da votação.";
-    if (phase === "editVote") return "Construa tensão até a indicação do líder e a votação da casa.";
     if (phase === "audienceVote") return "A votação está aberta. Agora o público decide quem deve sair.";
-    if (phase === "editElimination") return "Prepare o programa que vai anunciar a eliminação.";
     if (phase === "weekSummary") return activeParticipants.length === 3
       ? "Restam três. A próxima transmissão será a grande final."
       : `Semana ${week} encerrada. A próxima prova já está esperando.`;
-    if (phase === "editFinal" || phase === "liveFinal" || phase === "winnerVote") return "É a final. Desta vez, o público escolhe quem vence.";
+    if (phase === "liveFinal" || phase === "winnerVote") return "É a final. Desta vez, o público escolhe quem vence.";
     if (phase === "winnerReveal") return "Sinal encerrado. Você dirigiu a temporada inteira.";
     return "TRANSMISSÃO EM ANDAMENTO // NÃO DESLIGUE";
   }
@@ -1758,7 +2035,7 @@ export default function Home() {
             {count}/{items.length} registros recebidos · {isSynced ? "Feed sincronizado" : "Atualização automática ativa"}
           </span>
           {isSynced && (isParty ? (
-            <button className="button button-primary" onClick={() => startEdit("editVote")} type="button">
+            <button className="button button-primary" onClick={prepareVoteEdit} type="button">
               Ir para edição do episódio
             </button>
           ) : (
@@ -1939,6 +2216,7 @@ export default function Home() {
                   {emptyProgramZones.has(0) && dropZone(0, 0)}
                   {timeline.flatMap((item, index) => {
                     const isDragging = dragged?.source === "timeline" && dragged.id === item.id;
+                    const isRequiredItem = item.kind === "event" && isRequiredForCurrentEdit(item);
                     const followingBlockIndex = timeline.slice(0, index + 1).filter((candidate) => candidate.kind === "ad").length;
                     return [
                       <article
@@ -1961,7 +2239,7 @@ export default function Home() {
                           <>
                             <div className="timeline-item-heading">
                               <span className="timeline-index">{String(index + 1).padStart(2, "0")}</span>
-                              <span className="timeline-kind-label">{item.kind === "important-event" ? "ACONTECIMENTO IMPORTANTE" : item.requiredAnchor ? `${item.category} · OBRIGATÓRIO` : item.category}</span>
+                              <span className="timeline-kind-label">{item.kind === "important-event" ? "ACONTECIMENTO IMPORTANTE" : isRequiredItem ? `${item.category} · OBRIGATÓRIO` : item.category}</span>
                               <span className="timeline-drag-handle" aria-label={`Arrastar ${item.title}`}>⠿</span>
                             </div>
                             <h3>{item.title}</h3>
@@ -1969,6 +2247,49 @@ export default function Home() {
                               <b>{item.kind === "important-event" ? formatClockDuration(item.edit.finalDurationSeconds) : `${item.duration} min`}</b>
                               {item.kind === "important-event" && <span>{item.edit.selectedBeatIds.length} MOMENTOS · {importantEventStatusLabels[item.edit.status]}</span>}
                             </div>
+                            {item.kind === "event" && (() => {
+                              const eventParticipants = participantIdsForEditorEvent(item);
+                              const focusValue = item.approach.perspectiveIds.length === 1
+                                ? item.approach.perspectiveIds[0]
+                                : "all";
+                              return (
+                                <fieldset className="approach-editor">
+                                  <legend>ENQUADRAMENTO DO CORTE</legend>
+                                  <label>
+                                    <span>Leitura</span>
+                                    <select
+                                      aria-label={`Tom de ${item.title}`}
+                                      onChange={(event) => updateEventApproach(item.id, { tone: event.target.value as CutTone })}
+                                      value={item.approach.tone}
+                                    >
+                                      <option value="neutro">Neutra</option>
+                                      <option value="engracado">Engraçada</option>
+                                      <option value="emocional">Emocional</option>
+                                      <option value="triste">Triste</option>
+                                      <option value="conflituoso">Conflituosa</option>
+                                      <option value="malicioso">Maliciosa</option>
+                                    </select>
+                                  </label>
+                                  <label>
+                                    <span>Perspectiva</span>
+                                    <select
+                                      aria-label={`Perspectiva de ${item.title}`}
+                                      onChange={(event) => updateEventApproach(item.id, {
+                                        perspectiveIds: event.target.value === "all" ? eventParticipants : [event.target.value],
+                                      })}
+                                      value={focusValue}
+                                    >
+                                      <option value="all">Todos os envolvidos</option>
+                                      {eventParticipants.map((participantId) => (
+                                        <option key={participantId} value={participantId}>
+                                          {participants.find((participant) => participant.id === participantId)?.name ?? participantId}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                </fieldset>
+                              );
+                            })()}
                           </>
                         )}
                         <div className="timeline-controls">
@@ -2016,10 +2337,11 @@ export default function Home() {
                     .map((id) => participants.find((participant) => participant.id === id))
                     .filter((participant): participant is Participant => Boolean(participant));
                   const isDragging = dragged?.source === "bank" && dragged.id === event.id;
+                  const isRequiredEvent = isRequiredForCurrentEdit(event);
                   return (
                     <article
                       aria-grabbed={isDragging}
-                      className={`event-card${event.requiredAnchor ? " is-required" : ""}${isDragging ? " is-dragging" : ""}${highlightedEditorItemId === event.id ? " is-located" : ""}`}
+                      className={`event-card${isRequiredEvent ? " is-required" : ""}${isDragging ? " is-dragging" : ""}${highlightedEditorItemId === event.id ? " is-located" : ""}`}
                       data-category={event.category}
                       draggable
                       id={`editor-bank-${event.id}`}
@@ -2029,7 +2351,7 @@ export default function Home() {
                       tabIndex={-1}
                     >
                       <div className="event-card-top">
-                        <div className="event-card-labels"><span>{event.category}</span>{event.requiredAnchor && <em className="required-badge">OBRIGATÓRIO</em>}</div>
+                        <div className="event-card-labels"><span>{event.category}</span>{isRequiredEvent && <em className="required-badge">OBRIGATÓRIO</em>}</div>
                         <b>{event.duration} min</b>
                       </div>
                       <h3>{event.title}</h3>
@@ -2115,10 +2437,186 @@ export default function Home() {
     );
   }
 
+  function renderAudienceWorkflow() {
+    if (phase === "summaryPremiere" || phase === "summaryChallenge") {
+      const premiere = phase === "summaryPremiere";
+      const result = latestAudienceResult;
+      const metTarget = (result?.averageRating ?? 0)
+        >= shadowGameState.audienceModel.market.networkTargetPoints;
+      return (
+        <section className="audience-workflow audience-workflow-summary" aria-labelledby="audience-workflow-title">
+          <header className="audience-workflow-heading">
+            <div>
+              <span>RELATÓRIO DE EXIBIÇÃO · EPISÓDIO {String(week * 3 - 2).padStart(2, "0")}</span>
+              <h2 id="audience-workflow-title">
+                {premiere
+                  ? metTarget ? "Estreia acima da meta" : "A estreia encontrou seu público"
+                  : `Liderança da semana ${week} definida`}
+              </h2>
+              <p>
+                {premiere
+                  ? `O elenco foi apresentado e ${leader?.name ?? "um participante"} encerrou a noite na liderança.`
+                  : `${leader?.name ?? "Um participante"} venceu a prova${challengeRunnerUp ? `, com ${challengeRunnerUp.name} na segunda colocação` : ""}.`}
+              </p>
+            </div>
+            <div className="audience-workflow-highlight">
+              <small>MÉDIA</small>
+              <b>{(result?.averageRating ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>
+              <span>pontos</span>
+            </div>
+          </header>
+          <footer className="audience-workflow-footer">
+            <p>O relatório completo desta transmissão está disponível abaixo.</p>
+            <button
+              className="button button-primary"
+              onClick={() => {
+                dispatchGame({ type: "START_PARTY" });
+                setPhase("feedParty");
+                setView("feed");
+                setWindowOpen(true);
+              }}
+              type="button"
+            >
+              Voltar ao feed da casa
+            </button>
+          </footer>
+        </section>
+      );
+    }
+
+    if (phase === "audienceVote" || phase === "winnerVote") {
+      const isFinalVote = phase === "winnerVote";
+      const choices = isFinalVote
+        ? activeParticipants
+        : participants.filter((participant) => nominees.includes(participant.id));
+      const resolvedVote = pendingAudienceVote?.kind === (isFinalVote ? "final" : "elimination")
+        ? pendingAudienceVote
+        : null;
+      const authoritativeChoiceId = shadowGameState.audienceModel.mode === "clustered"
+        ? resolvedVote?.selectedParticipantId ?? null
+        : isFinalVote
+          ? legacyFinalChoice
+          : audiencePick ?? legacyEliminationChoice;
+      const voteReady = Boolean(authoritativeChoiceId);
+      return (
+        <section className="audience-workflow audience-workflow-vote" aria-labelledby="audience-workflow-title">
+          <header className="audience-workflow-heading">
+            <div>
+              <span>{isFinalVote ? "GRANDE FINAL" : `SEMANA ${String(week).padStart(2, "0")} · VOTAÇÃO ENCERRADA`}</span>
+              <h2 id="audience-workflow-title">
+                {voteReady ? "Resultado consolidado" : "Consolidando o painel…"}
+              </h2>
+              <p>
+                {shadowGameState.audienceModel.mode === "shadow"
+                  ? "A projeção das 16 coortes foi registrada para calibração; o resultado oficial segue o modo de compatibilidade."
+                  : "A votação automática considerou participação, conhecimento, rejeição e proteção aos favoritos de cada coorte."}
+              </p>
+            </div>
+            <div className="audience-workflow-status">
+              <i aria-hidden="true" />
+              <span>{voteReady ? "RESULTADO BLOQUEADO" : "PROCESSANDO"}</span>
+            </div>
+          </header>
+          <div className={`audience-workflow-candidates candidates-${choices.length}`}>
+            {choices.map((participant) => {
+              const selected = authoritativeChoiceId === participant.id;
+              return (
+                <article className={selected ? "is-selected" : ""} key={participant.id}>
+                  <Avatar participant={participant} size="small" />
+                  <div>
+                    <span>{participant.city}</span>
+                    <b>{participant.name}</b>
+                    <small>
+                      {resolvedVote
+                        ? `${Math.round((resolvedVote.shares[participant.id] ?? 0) * 1000) / 10}% dos votos`
+                        : "Resultado de compatibilidade"}
+                    </small>
+                  </div>
+                  <em>{selected ? isFinalVote ? "VENCEDOR" : "MAIOR REJEIÇÃO" : "AMOSTRA"}</em>
+                </article>
+              );
+            })}
+          </div>
+          <footer className="audience-workflow-footer">
+            <p>Os detalhes de turnout, coortes e fandom permanecem no relatório abaixo.</p>
+            <button
+              className="button button-primary"
+              disabled={!voteReady}
+              onClick={isFinalVote ? voteWinner : confirmAudienceElimination}
+              type="button"
+            >
+              {isFinalVote ? "Revelar vencedor" : "Preparar programa de eliminação"}
+            </button>
+          </footer>
+        </section>
+      );
+    }
+
+    if (phase === "weekSummary") {
+      const finalists = activeParticipants.length === 3;
+      return (
+        <section className="audience-workflow audience-workflow-week" aria-labelledby="audience-workflow-title">
+          <header className="audience-workflow-heading">
+            <div>
+              <span>ARQUIVO SEMANAL · SEMANA {String(week).padStart(2, "0")}</span>
+              <h2 id="audience-workflow-title">
+                {finalists ? "Os três finalistas estão definidos" : `Semana ${week} encerrada`}
+              </h2>
+              <p>
+                {lastEliminated
+                  ? `${lastEliminated.name} deixou a casa. O histórico de seus fãs foi preservado para os impactos do próximo episódio.`
+                  : "A transmissão foi arquivada e os dados da semana estão consolidados."}
+              </p>
+            </div>
+            <div className="audience-workflow-highlight">
+              <small>NA CASA</small>
+              <b>{activeParticipants.length}</b>
+              <span>participantes</span>
+            </div>
+          </header>
+          {lastEliminated && (
+            <div className="audience-workflow-eliminated">
+              <Avatar participant={lastEliminated} size="small" eliminated />
+              <div>
+                <span>ELIMINADO</span>
+                <b>{lastEliminated.name}</b>
+                <small>
+                  {shadowGameState.audienceModel.mode === "clustered" && latestEliminationVote
+                    ? `${Math.round((latestEliminationVote.shares[lastEliminated.id] ?? 0) * 1000) / 10}% dos votos`
+                    : "Resultado oficial encerrado"}
+                </small>
+              </div>
+            </div>
+          )}
+          <footer className="audience-workflow-footer">
+            <p>{currentWeekAudienceBroadcasts.length} transmissões medidas nesta semana.</p>
+            <button
+              className="button button-primary"
+              onClick={finalists ? () => startEdit("editFinal") : nextWeek}
+              type="button"
+            >
+              {finalists ? "Preparar a grande final" : `Começar semana ${week + 1}`}
+            </button>
+          </footer>
+        </section>
+      );
+    }
+
+    return null;
+  }
+
   function renderAppContent() {
     if (view === "mail") return renderMail();
     if (view === "feed") return renderFeed();
     if (view === "challenge") return renderChallenge();
+    if (view === "audience") {
+      return (
+        <div className="audience-app-content">
+          {renderAudienceWorkflow()}
+          <AudienceReport state={shadowGameState} />
+        </div>
+      );
+    }
     return renderEditor();
   }
 
@@ -2143,7 +2641,33 @@ export default function Home() {
   }
 
   if (isLivePhase) {
-    const liveAudience = Math.round(11 + (predictedAudience - 11) * liveProgress / 100);
+    const storedResult = latestAudienceResult;
+    const checkpoints = storedResult?.checkpoints ?? [];
+    const totalElapsedSeconds = checkpoints.at(-1)?.elapsedSeconds
+      ?? latestAudienceBroadcast?.episode?.segments.reduce((sum, segment) => sum + segment.durationSeconds, 0)
+      ?? 1;
+    const revealElapsedSeconds = totalElapsedSeconds * liveProgress / 100;
+    const revealedCheckpoints = checkpoints.filter(
+      (checkpoint) => checkpoint.elapsedSeconds <= revealElapsedSeconds || liveProgress >= 100,
+    );
+    const currentCheckpoint = revealedCheckpoints.at(-1) ?? null;
+    const previousCheckpoint = revealedCheckpoints.at(-2) ?? null;
+    const liveAudience = currentCheckpoint?.rating
+      ?? storedResult?.forecast.expected
+      ?? shadowGameState.audienceModel.market.networkTargetPoints;
+    const revealedPeak = revealedCheckpoints.reduce(
+      (peak, checkpoint) => Math.max(peak, checkpoint.rating),
+      liveAudience,
+    );
+    const liveShare = currentCheckpoint?.share ?? 0;
+    const trend = currentCheckpoint && previousCheckpoint
+      ? currentCheckpoint.rating - previousCheckpoint.rating
+      : 0;
+    const chartCeiling = Math.max(
+      shadowGameState.audienceModel.market.networkTargetPoints,
+      revealedPeak,
+      1,
+    );
     return (
       <main className={`broadcast-screen theme-${theme}`}>
         <ThemeSwitch onToggle={toggleTheme} theme={theme} />
@@ -2157,157 +2681,55 @@ export default function Home() {
           <div className="review-copy">
             <span className="eyebrow">LIVE PERFORMANCE REVIEW</span>
             <h1>{phase === "liveFinal" ? "A grande final está no ar" : phase === "liveElimination" ? "O Brasil espera o resultado" : phase === "liveChallenge" ? "A disputa pela liderança está no ar" : "O programa entrou no ar"}</h1>
-            <p>Monitoramento de audiência minuto a minuto.</p>
+            <p>
+              {currentCheckpoint
+                ? `Trecho no ar: ${currentCheckpoint.label}.`
+                : "Aguardando o primeiro checkpoint medido."}
+            </p>
           </div>
-          <div className="audience-number"><b>{liveAudience}</b><span>pontos</span></div>
-          <div className="live-chart" aria-label={`Audiência atual: ${liveAudience} pontos`}>
-            {Array.from({ length: 24 }).map((_, index) => {
-              const reached = index / 23 <= liveProgress / 100;
-              const height = 18 + ((index * 17 + week * 11) % 58);
-              return <i className={reached ? "reached" : ""} key={index} style={{ height: `${height}%` }} />;
+          <div className="audience-number">
+            <b>{liveAudience.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b>
+            <span>pontos</span>
+          </div>
+          <div
+            className="live-chart"
+            aria-label={`Audiência atual: ${liveAudience.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} pontos`}
+          >
+            {(checkpoints.length > 0 ? checkpoints : [{
+              segmentId: "awaiting-measurement",
+              rating: shadowGameState.audienceModel.market.networkTargetPoints,
+              elapsedSeconds: 0,
+              label: "Aguardando medição",
+            }]).map((checkpoint) => {
+              const reached = revealedCheckpoints.some((revealed) => revealed.segmentId === checkpoint.segmentId);
+              const height = reached ? Math.max(8, Math.min(100, checkpoint.rating / chartCeiling * 100)) : 8;
+              return (
+                <i
+                  className={reached ? "reached" : ""}
+                  key={checkpoint.segmentId}
+                  style={{ height: `${height}%` }}
+                  title={reached
+                    ? `${checkpoint.label}: ${checkpoint.rating.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} pontos`
+                    : "Checkpoint ainda não revelado"}
+                />
+              );
             })}
           </div>
           <div className="review-stats">
-            <span><small>PICO</small><b>{liveAudience + 3},2</b></span>
-            <span><small>SHARE</small><b>{Math.round(liveAudience * 1.7)}%</b></span>
-            <span><small>TENDÊNCIA</small><b className="up">↑ {Math.max(1, Math.round(liveProgress / 18))},4</b></span>
+            <span><small>PICO REVELADO</small><b>{revealedPeak.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b></span>
+            <span><small>SHARE</small><b>{(liveShare * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</b></span>
+            <span>
+              <small>TENDÊNCIA</small>
+              <b className={trend >= 0 ? "up" : ""}>
+                {trend > 0 ? "↑ " : trend < 0 ? "↓ " : "→ "}
+                {Math.abs(trend).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}
+              </b>
+            </span>
           </div>
           <div className="transmission-progress"><i style={{ width: `${liveProgress}%` }} /></div>
           <p className="transmission-status">{liveProgress < 100 ? "TRANSMISSÃO EM ANDAMENTO" : "ENCERRANDO SINAL…"}</p>
         </section>
         <div className="broadcast-noise" aria-hidden="true" />
-      </main>
-    );
-  }
-
-  if (phase === "summaryPremiere" || phase === "summaryChallenge") {
-    const premiere = phase === "summaryPremiere";
-    return (
-      <main className={`result-screen theme-${theme}`}>
-        <ThemeSwitch onToggle={toggleTheme} theme={theme} />
-        <RestartGameControl onConfirm={restartSeason} />
-        <div className="result-window">
-          <span className="eyebrow">RELATÓRIO DE EXIBIÇÃO · EPISÓDIO {String(week * 3 - 2).padStart(2, "0")}</span>
-          <h1>{premiere ? "Uma estreia acima da meta." : `A liderança da semana ${week} está definida.`}</h1>
-          <p>
-            {premiere
-              ? `O primeiro episódio apresentou o elenco, construiu uma rivalidade e terminou com ${leader?.name ?? "um participante"} na liderança.`
-              : `${leader?.name ?? "Um participante"} venceu a prova${challengeRunnerUp ? `, com ${challengeRunnerUp.name} logo atrás` : ""}. A casa já começou a reagir ao novo poder.`}
-          </p>
-          <div className="summary-metrics">
-            <div><span>AUDIÊNCIA MÉDIA</span><b>{predictedAudience},4</b><small>meta 24,0</small></div>
-            <div><span>PICO</span><b>{predictedAudience + 4},1</b><small>durante a prova</small></div>
-            <div><span>APROVAÇÃO</span><b>82%</b><small>pesquisa instantânea</small></div>
-          </div>
-          <div className="leader-callout">
-            {leader && <Avatar participant={leader} size="small" />}
-            <div><span>{premiere ? "PRIMEIRO LÍDER" : `LÍDER · SEMANA ${String(week).padStart(2, "0")}`}</span><b>{leader?.name}</b></div>
-          </div>
-          <button
-            className="button button-primary"
-            onClick={() => {
-              dispatchGame({ type: "START_PARTY" });
-              setPhase("feedParty");
-              setView("feed");
-              setWindowOpen(true);
-            }}
-            type="button"
-          >
-            Voltar ao computador
-          </button>
-        </div>
-      </main>
-    );
-  }
-
-  if (phase === "audienceVote" || phase === "winnerVote") {
-    const choices = phase === "winnerVote"
-      ? activeParticipants
-      : participants.filter((participant) => nominees.includes(participant.id));
-    const projectionWeight = (participantId: string) => {
-      const audience = shadowGameState.characters[participantId]?.audience;
-      if (!audience) return 1;
-      return phase === "winnerVote"
-        ? Math.max(1, audience.support + audience.awareness * 0.2)
-        : Math.max(1, 100 - audience.support + audience.controversy * 0.35);
-    };
-    const totalProjection = choices.reduce((sum, participant) => sum + projectionWeight(participant.id), 0);
-    return (
-      <main className={`vote-screen theme-${theme}`}>
-        <ThemeSwitch onToggle={toggleTheme} theme={theme} />
-        <RestartGameControl onConfirm={restartSeason} />
-        <div className="vote-brand"><span>CASA</span><b>VIGIADA</b><small>VOTAÇÃO DO PÚBLICO</small></div>
-        <section className="vote-box">
-          <span className="eyebrow">{phase === "winnerVote" ? "GRANDE FINAL" : `SEMANA ${String(week).padStart(2, "0")} · VOTAÇÃO ABERTA`}</span>
-          <h1>{phase === "winnerVote" ? "Quem deve vencer?" : "Quem deve sair?"}</h1>
-          <p>{phase === "winnerVote" ? "Escolha o participante que merece levar o prêmio." : "A decisão do público define o próximo corte do programa."}</p>
-          <div className={`vote-cards vote-${choices.length}`}>
-            {choices.map((participant) => (
-              <button
-                aria-pressed={audiencePick === participant.id}
-                className={audiencePick === participant.id ? "is-selected" : ""}
-                key={participant.id}
-                onClick={() => setAudiencePick(participant.id)}
-                type="button"
-              >
-                <Avatar participant={participant} size="large" />
-                <span>{participant.city}</span>
-                <b>{participant.name}</b>
-                <small>{participant.occupation}</small>
-                <small>
-                  {Math.round(projectionWeight(participant.id) / Math.max(1, totalProjection) * 100)}%
-                  {" "}{phase === "winnerVote" ? "de apoio projetado" : "de risco projetado"}
-                </small>
-                <i>{audiencePick === participant.id ? "SELECIONADO ✓" : "VOTAR"}</i>
-              </button>
-            ))}
-          </div>
-          <button
-            className="button button-primary vote-confirm"
-            disabled={!audiencePick}
-            onClick={phase === "winnerVote" ? voteWinner : confirmAudienceElimination}
-            type="button"
-          >
-            Confirmar voto
-          </button>
-        </section>
-      </main>
-    );
-  }
-
-  if (phase === "weekSummary") {
-    const finalists = activeParticipants.length === 3;
-    return (
-      <main className={`result-screen week-result theme-${theme}`}>
-        <ThemeSwitch onToggle={toggleTheme} theme={theme} />
-        <RestartGameControl onConfirm={restartSeason} />
-        <div className="result-window">
-          <span className="eyebrow">ARQUIVO SEMANAL · SEMANA {String(week).padStart(2, "0")}</span>
-          <h1>{finalists ? "Temos os três finalistas." : `Semana ${week} encerrada.`}</h1>
-          {lastEliminated && (
-            <div className="eliminated-callout">
-              <Avatar participant={lastEliminated} size="large" eliminated />
-              <div>
-                <span>ELIMINADO COM {54 + week * 7}% DOS VOTOS</span>
-                <b>{lastEliminated.name}</b>
-                <p>“{lastEliminated.quote}”</p>
-              </div>
-            </div>
-          )}
-          <div className="summary-metrics">
-            <div><span>EPISÓDIOS</span><b>03</b><small>exibidos nesta semana</small></div>
-            <div><span>MÉDIA</span><b>{predictedAudience + 2},8</b><small>+{week + 2}% vs. anterior</small></div>
-            <div><span>NA CASA</span><b>{activeParticipants.length}</b><small>participantes ativos</small></div>
-          </div>
-          <div className="remaining-strip">
-            {activeParticipants.map((participant) => (
-              <div key={participant.id}><Avatar participant={participant} size="small" /><span>{participant.name.split(" ")[0]}</span></div>
-            ))}
-          </div>
-          <button className="button button-primary" onClick={finalists ? () => startEdit("editFinal") : nextWeek} type="button">
-            {finalists ? "Preparar a grande final" : `Começar semana ${week + 1}`}
-          </button>
-        </div>
       </main>
     );
   }
@@ -2322,13 +2744,18 @@ export default function Home() {
           <span className="eyebrow">CASA VIGIADA · FINAL DA TEMPORADA</span>
           <h1>O Brasil escolheu.</h1>
           {winner && <Avatar participant={winner} size="large" />}
-          <p>Com 62% dos votos, o grande vencedor é</p>
+          <p>
+            Com{" "}
+            {winner && shadowGameState.audienceModel.mode === "clustered" && latestFinalVote
+              ? Math.round((latestFinalVote.shares[winner.id] ?? 0) * 1000) / 10
+              : "—"}% dos votos, o grande vencedor é
+          </p>
           <h2>{winner?.name}</h2>
           <blockquote>“{winner?.quote}”</blockquote>
           <div className="summary-metrics">
             <div><span>SEMANAS</span><b>{week}</b></div>
-            <div><span>EPISÓDIOS</span><b>{week * 3 + 1}</b></div>
-            <div><span>MAIOR PICO</span><b>{predictedAudience + 9},7</b></div>
+            <div><span>EPISÓDIOS</span><b>{audienceBroadcasts.length}</b></div>
+            <div><span>MAIOR PICO</span><b>{seasonPeakRating.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}</b></div>
           </div>
           <button
             className="button button-primary"
@@ -2354,12 +2781,13 @@ export default function Home() {
         <AppIcon active={view === "feed"} label="Feed da casa" onClick={openFeed} symbol="▣" />
         <AppIcon active={view === "challenge"} disabled={phase !== "challenge"} label="Provas" onClick={openChallenge} symbol="◎" />
         <AppIcon active={view === "edit"} disabled={!isEditPhase} label="Edição" onClick={() => { if (isEditPhase) { setView("edit"); setWindowOpen(true); } }} symbol="▤" />
+        <AppIcon active={view === "audience"} label="Pesquisa & Audiência" onClick={() => { setView("audience"); setWindowOpen(true); }} symbol="▥" />
       </aside>
 
       {windowOpen && (
         <section className={`app-window app-${view}`}>
           <header className="window-titlebar">
-            <div><span className="window-app-icon">{view === "mail" ? "✉" : view === "feed" ? "▣" : view === "challenge" ? "◎" : "▤"}</span>{view === "mail" ? "Caixa de Entrada — Correio RPT" : "Central de Produção — Casa Vigiada"}</div>
+            <div><span className="window-app-icon">{view === "mail" ? "✉" : view === "feed" ? "▣" : view === "challenge" ? "◎" : view === "audience" ? "▥" : "▤"}</span>{view === "mail" ? "Caixa de Entrada — Correio RPT" : view === "audience" ? "Pesquisa & Audiência — Painel Ficcional RPT" : "Central de Produção — Casa Vigiada"}</div>
             <div className="window-buttons">
               <button aria-label="Minimizar janela" onClick={() => setWindowOpen(false)} type="button">—</button>
               <button aria-label="Maximizar janela" type="button">□</button>
@@ -2371,6 +2799,7 @@ export default function Home() {
               <button aria-selected={view === "feed"} onClick={openFeed} role="tab" type="button">Feed</button>
               <button aria-selected={view === "challenge"} disabled={phase !== "challenge"} onClick={openChallenge} role="tab" type="button">Gerenciamento de provas</button>
               <button aria-selected={view === "edit"} disabled={!isEditPhase} onClick={() => setView("edit")} role="tab" type="button">Edição</button>
+              <button aria-selected={view === "audience"} onClick={() => setView("audience")} role="tab" type="button">Pesquisa & Audiência</button>
             </nav>
           )}
           <div className="window-content">{renderAppContent()}</div>

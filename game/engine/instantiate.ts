@@ -1,4 +1,5 @@
 import { castById } from "../content/cast";
+import { deriveAudienceSignals, neutralPortrayals } from "../audience/signals";
 import type { AppliedEffect, EventInstance, GameState } from "../types";
 import type { EventCandidate } from "./enumerate";
 
@@ -44,6 +45,12 @@ export function instantiateEvent(state: GameState, candidate: EventCandidate): E
     category: candidate.template.category,
     duration: Math.max(3, Math.min(8, Math.round(3 + candidate.score / 35))),
     heat: Math.max(20, Math.min(100, Math.round(candidate.score))),
+    audienceSignals: deriveAudienceSignals(
+      candidate.template.category,
+      candidate.template.tags,
+      candidate.template.audienceSignals,
+    ),
+    observablePortrayals: neutralPortrayals(candidate.actorIds),
     effects, scoreBreakdown: { ...candidate.scoreBreakdown },
   };
 }

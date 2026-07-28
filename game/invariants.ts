@@ -1,4 +1,9 @@
 import { castById } from "./content/cast";
+import {
+  collectAudienceResultErrors,
+  collectAudienceStateErrors,
+  collectBroadcastEpisodeErrors,
+} from "./audience/validation";
 import { selectActiveCast } from "./selectors/active-cast";
 import type { GameState } from "./types";
 
@@ -6,6 +11,7 @@ const bounded = (value: number) => Number.isFinite(value) && value >= 0 && value
 
 export function collectInvariantErrors(state: GameState): string[] {
   const errors: string[] = [];
+  errors.push(...collectAudienceStateErrors(state.audienceModel, state.castOrder));
   const active = new Set(selectActiveCast(state));
   for (const [id, character] of Object.entries(state.characters)) {
     if (!castById[id]) errors.push(`runtime participant does not reference a profile: ${id}`);
@@ -78,6 +84,19 @@ export function collectInvariantErrors(state: GameState): string[] {
         errors.push(`event ${event.id} has invalid thread reference ${threadId}`);
       }
     }
+    for (const [interest, value] of Object.entries(event.audienceSignals)) {
+      if (!Number.isFinite(value) || value < 0 || value > 1) {
+        errors.push(`event ${event.id} audience signal ${interest} is out of bounds`);
+      }
+    }
+    for (const [participantId, portrayals] of Object.entries(event.observablePortrayals)) {
+      if (!event.actorIds.includes(participantId)) {
+        errors.push(`event ${event.id} portrays an actor who was not observable: ${participantId}`);
+      }
+      if (!portrayals || portrayals.length === 0) {
+        errors.push(`event ${event.id} has an empty portrayal for ${participantId}`);
+      }
+    }
   }
   const anchorCounts = new Map<string, number>();
   for (const event of state.house.eventHistory.filter((item) => item.templateId.startsWith("anchor:"))) {
@@ -91,8 +110,76 @@ export function collectInvariantErrors(state: GameState): string[] {
   }
   const winners = Object.values(state.characters).filter((character) => character.status === "winner");
   if (state.competition.winnerId && winners.length !== 1) errors.push("resolved season does not have exactly one winner");
+  const audienceEpisodeIds = new Set<string>();
+  const audienceEpisodesById = new Map<string, NonNullable<GameState["broadcasts"][number]["episode"]>>();
   for (const broadcast of state.broadcasts) {
     for (const cut of broadcast.cuts) if (!ids.has(cut.eventInstanceId)) errors.push(`cut references missing event: ${cut.eventInstanceId}`);
+    if (broadcast.detailLevel === "clustered" && (!broadcast.episode || !broadcast.result)) {
+      errors.push(`clustered broadcast in week ${broadcast.week} is missing its immutable input or result`);
+    }
+    if (broadcast.episode) {
+      errors.push(...collectBroadcastEpisodeErrors(broadcast.episode, state.castOrder)
+        .map((error) => `broadcast ${broadcast.episode?.id}: ${error}`));
+      if (audienceEpisodeIds.has(broadcast.episode.id)) {
+        errors.push(`duplicate audience episode id: ${broadcast.episode.id}`);
+      }
+      audienceEpisodeIds.add(broadcast.episode.id);
+      audienceEpisodesById.set(broadcast.episode.id, broadcast.episode);
+      if (broadcast.episode.week !== broadcast.week) {
+        errors.push(`broadcast ${broadcast.episode.id} week does not match its record`);
+      }
+    }
+    if (broadcast.result) {
+      errors.push(...collectAudienceResultErrors(broadcast.result, state.audienceModel)
+        .map((error) => `audience result ${broadcast.result?.episodeId}: ${error}`));
+      if (!broadcast.episode || broadcast.result.episodeId !== broadcast.episode.id) {
+        errors.push(`audience result ${broadcast.result.episodeId} is detached from its broadcast input`);
+      }
+    }
+  }
+  const voteIds = new Set<string>();
+  const allAudienceVotes = [
+    ...state.audienceModel.voteHistory,
+    ...(state.audienceModel.pendingVote ? [state.audienceModel.pendingVote] : []),
+  ];
+  for (const vote of allAudienceVotes) {
+    if (voteIds.has(vote.id)) errors.push(`duplicate audience vote id: ${vote.id}`);
+    voteIds.add(vote.id);
+    const lockingEpisode = audienceEpisodesById.get(vote.lockedAfterEpisodeId);
+    const expectedEpisodeKind = vote.kind === "elimination" ? "vote" : "final";
+    if (!lockingEpisode) {
+      errors.push(`audience vote ${vote.id} is not linked to a persisted broadcast`);
+    } else if (lockingEpisode.week !== vote.week || lockingEpisode.kind !== expectedEpisodeKind) {
+      errors.push(`audience vote ${vote.id} is linked to the wrong broadcast week or kind`);
+    }
+  }
+  const pendingVote = state.audienceModel.pendingVote;
+  if (pendingVote?.kind === "elimination") {
+    const pendingCandidates = [...pendingVote.participantIds].sort();
+    const currentNominees = [...state.competition.nomineeIds].sort();
+    if (
+      pendingCandidates.length !== currentNominees.length
+      || pendingCandidates.some((participantId, index) => participantId !== currentNominees[index])
+    ) {
+      errors.push("pending elimination vote candidates do not match current nominees");
+    }
+  }
+  if (state.audienceModel.mode === "clustered") {
+    for (const vote of state.audienceModel.voteHistory) {
+      if (vote.kind === "elimination") {
+        const elimination = state.competition.eliminationHistory.find(
+          (candidate) => candidate.week === vote.week,
+        );
+        if (!elimination || elimination.eliminatedId !== vote.selectedParticipantId) {
+          errors.push(`clustered audience vote does not match elimination in week ${vote.week}`);
+        }
+      } else if (
+        state.competition.winnerId
+        && vote.selectedParticipantId !== state.competition.winnerId
+      ) {
+        errors.push("clustered final audience vote does not match the season winner");
+      }
+    }
   }
   return errors;
 }

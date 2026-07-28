@@ -87,8 +87,13 @@ test("source contains the complete playable season loop", async () => {
   assert.match(page, /const FEED_REFRESH_MS = 3500/);
   assert.match(page, /Atualização automática ativa/);
   assert.doesNotMatch(page, /Maior potencial|>potencial</i);
-  assert.match(page, /Quem deve sair\?/);
-  assert.match(page, /Quem deve vencer\?/);
+  assert.match(page, /CLOSE_AUDIENCE_VOTE/);
+  assert.match(page, /CLOSE_FINAL_VOTE/);
+  assert.match(page, /Consolidando o painel…/);
+  assert.match(page, /showAudienceWorkflow/);
+  assert.match(page, /setView\("audience"\)/);
+  assert.match(page, /audience-workflow/);
+  assert.match(css, /\.computer-shell \.audience-workflow/);
   assert.match(page, /activeParticipants\.length === 3/);
   assert.match(css, /prefers-reduced-motion/);
   assert.match(css, /\.computer-shell \.feed-entry > div:not\(\.feed-line\)/);
@@ -163,6 +168,7 @@ test("Edição uses the approved timeline, bank and persistent cut-state workspa
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   const analysis = await readFile(new URL("../app/editor-analysis.ts", import.meta.url), "utf8");
+  const audienceReport = await readFile(new URL("../app/audience-report.tsx", import.meta.url), "utf8");
   const editorSource = page.slice(page.indexOf("function renderEditor()"), page.indexOf("function renderMail()"));
 
   assert.match(analysis, /minMinutes:\s*38/);
@@ -175,11 +181,15 @@ test("Edição uses the approved timeline, bank and persistent cut-state workspa
   assert.match(analysis, /classifyFocus/);
   assert.match(analysis, /buildEditorialAlerts/);
   assert.match(analysis, /firstEmptyProgramZoneIndex/);
+  assert.match(analysis, /selectEditorEpisodeBank/);
+  assert.match(analysis, /reconcileTimelineWithCanonicalHistory/);
   assert.match(analysis, /item\.kind === "ad" \|\| item\.id !== id/);
 
   assert.match(editorSource, /editor-workspace/);
   assert.match(editorSource, /timeline-drop-zone/);
   assert.match(editorSource, /timeline-ad-copy/);
+  assert.match(page, /requiresCanonicalHistory:\s*shadowGameState\.audienceModel\.mode !== "legacy"/);
+  assert.match(page, /Um bloco antigo sem gravação canônica foi removido/);
   assert.match(editorSource, /item\.kind !== "ad"/);
   assert.match(editorSource, /heading-current-duration/);
   assert.match(editorSource, /FAIXA IDEAL/);
@@ -201,6 +211,10 @@ test("Edição uses the approved timeline, bank and persistent cut-state workspa
   assert.match(editorSource, /event-card-participants/);
   assert.match(editorSource, /required-badge/);
   assert.match(editorSource, /OBRIGATÓRIOS/);
+  assert.match(page, /toEpisodeFootageView\(event, episodeKind\)/);
+  assert.match(page, /isRequiredEpisodeFootage\(canonicalEvent, episodeKindForPhase\(phase\)\)/);
+  assert.match(page, /episodeBankEvents\.find\(\(item\) => item\.id === dragged\.id\)/);
+  assert.match(editorSource, /const isRequiredEvent = isRequiredForCurrentEdit\(event\)/);
   assert.match(editorSource, /locateRequiredEvent/);
   assert.match(editorSource, /Ritmo/);
   assert.match(editorSource, /Variedade/);
@@ -212,8 +226,15 @@ test("Edição uses the approved timeline, bank and persistent cut-state workspa
   assert.match(editorSource, /Inclua todos os cortes obrigatórios/);
   assert.match(editorSource, /Pronto para transmitir/);
   assert.match(editorSource, /!importantBlockInTimeline/);
-  assert.doesNotMatch(editorSource, /audiência prevista|AUDIÊNCIA|Parcialidade|Todos os lados|approach-tone/);
-  assert.match(page, /const liveAudience = Math\.round\(11 \+ \(predictedAudience - 11\)/);
+  assert.doesNotMatch(editorSource, /audience-forecast-card/);
+  assert.doesNotMatch(editorSource, /PREVISÃO DE AUDIÊNCIA/);
+  assert.match(editorSource, /ENQUADRAMENTO DO CORTE/);
+  assert.match(editorSource, /Perspectiva/);
+  assert.doesNotMatch(editorSource, /RISCO DE FADIGA \/ RETORNO/);
+  assert.doesNotMatch(page, /selectAudienceForecastDetails|predictedAudience/);
+  assert.match(audienceReport, /forecast/);
+  assert.match(page, /phase === "liveElimination" \|\| phase === "weekSummary"/);
+  assert.match(page, /const liveAudience = currentCheckpoint\?\.rating[\s\S]*?storedResult\?\.forecast\.expected[\s\S]*?networkTargetPoints/);
 
   assert.match(css, /grid-template-columns:\s*minmax\(0, 81fr\) minmax\(200px, 19fr\)/);
   assert.match(css, /\.computer-shell \.timeline-track \.timeline-ad[\s\S]*?flex:\s*0 0 68px/);
@@ -225,7 +246,7 @@ test("Edição uses the approved timeline, bank and persistent cut-state workspa
   assert.match(css, /grid-auto-rows:\s*148px/);
   assert.match(css, /\.computer-shell \.important-card-footer > button[\s\S]*?position:\s*static/);
   assert.match(css, /\.computer-shell \.important-card-footer > button[\s\S]*?background:\s*var\(--chrome\)/);
-  assert.match(css, /Consolidated Edição layout[\s\S]*?grid-template-rows:\s*175px minmax\(0, 1fr\)/);
+  assert.match(css, /Consolidated Edição layout[\s\S]*?grid-template-rows:\s*220px minmax\(0, 1fr\)/);
   assert.equal((css.match(/Consolidated Edição layout/g) ?? []).length, 1);
   assert.doesNotMatch(css, /Final desktop proportions|Final consistency pass|Mockup-alignment corrections/);
   assert.match(css, /\.computer-shell \.timeline-drop-zone[\s\S]*?flex:\s*1 1 80px[\s\S]*?min-width:\s*72px/);
@@ -237,6 +258,9 @@ test("Edição uses the approved timeline, bank and persistent cut-state workspa
   assert.doesNotMatch(css, /\.important-footage-feature/);
   assert.match(css, /\.editor-transmit-area \.button:disabled[\s\S]*?cursor:\s*not-allowed/);
   assert.match(css, /\.computer-shell \.duration-current-label\.is-high[\s\S]*?translateX\(-100%\)/);
+  assert.match(css, /\.computer-shell \.timeline-track \.timeline-event\s*\{[\s\S]*?grid-template-rows:\s*auto minmax\(0, 1fr\) auto auto auto;[\s\S]*?overflow:\s*hidden/);
+  assert.match(css, /\.computer-shell \.timeline-track \.timeline-event > \.approach-editor label\s*\{[\s\S]*?grid-template-columns:\s*38px minmax\(0, 1fr\)/);
+  assert.match(css, /\.computer-shell \.timeline-track \.timeline-event > \.approach-editor select\s*\{[\s\S]*?width:\s*100%;[\s\S]*?min-width:\s*0;[\s\S]*?height:\s*20px;[\s\S]*?font:\s*8px\/1 Tahoma/);
   assert.match(css, /\.computer-shell \.app-edit \.window-content \{\s*overflow:\s*hidden/);
   assert.match(css, /\.computer-shell \.event-bank \.event-grid[\s\S]*?overflow-y:\s*auto/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.computer-shell \.editor-workspace[\s\S]*?flex-direction:\s*column/);

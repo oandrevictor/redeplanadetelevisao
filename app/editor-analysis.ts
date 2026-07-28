@@ -88,6 +88,28 @@ export function validateEditorCut(
 
 type TimelineLike = { id: string; kind: string };
 
+export function selectEditorEpisodeBank<T>(
+  canonicalEvents: T[],
+  legacyEvents: T[],
+  options: { requiresCanonicalHistory: boolean; dynamicEngine: boolean },
+): T[] {
+  if (options.requiresCanonicalHistory) return canonicalEvents;
+  return options.dynamicEngine && canonicalEvents.length >= 2
+    ? canonicalEvents
+    : legacyEvents;
+}
+
+export function reconcileTimelineWithCanonicalHistory<T extends TimelineLike>(
+  timeline: T[],
+  canonicalEventIds: Iterable<string>,
+): T[] {
+  const canonicalIds = new Set(canonicalEventIds);
+  const reconciled = timeline.filter(
+    (item) => item.kind !== "event" || canonicalIds.has(item.id),
+  );
+  return reconciled.length === timeline.length ? timeline : reconciled;
+}
+
 export function firstEmptyProgramZoneIndex<T extends TimelineLike>(timeline: T[]): number {
   let zoneStart = 0;
   let zoneHasEditorialItem = false;

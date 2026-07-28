@@ -7449,6 +7449,64 @@ select:focus-visible {
   text-decoration: line-through;
 }
 
+/* Timeline event controls are deliberately denser than their event-bank version. */
+
+.computer-shell .timeline-track .timeline-event {
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  overflow: hidden;
+}
+
+.computer-shell .timeline-track .timeline-event > .approach-editor {
+  min-width: 0;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 3px 4px 4px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+}
+
+.computer-shell .timeline-track .timeline-event > .approach-editor legend {
+  max-width: 100%;
+  padding: 0 2px;
+  overflow: hidden;
+  font: 700 6px/1 "Courier New", monospace;
+  letter-spacing: .04em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.computer-shell .timeline-track .timeline-event > .approach-editor label {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.computer-shell .timeline-track .timeline-event > .approach-editor label > span {
+  overflow: hidden;
+  color: var(--ui-muted);
+  font: 700 7px/1 "Courier New", monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.computer-shell .timeline-track .timeline-event > .approach-editor select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: 20px;
+  padding: 0 3px;
+  border: 1px solid var(--chrome-dark);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--ui-text);
+  box-shadow: inset 1px 1px 0 var(--chrome-shadow), inset -1px -1px 0 var(--chrome-hi);
+  font: 8px/1 Tahoma, Arial, sans-serif;
+}
+
 @media (min-width: 901px) {
   .computer-shell .editor-panel {
     grid-template-columns: minmax(0, 81fr) minmax(200px, 19fr);
@@ -7578,7 +7636,7 @@ select:focus-visible {
   .computer-shell .editor-main-column {
     grid-column: 1;
     grid-row: 2;
-    grid-template-rows: 175px minmax(0, 1fr);
+    grid-template-rows: 220px minmax(0, 1fr);
     gap: 7px;
   }
 
@@ -7664,6 +7722,10 @@ select:focus-visible {
     padding: 6px;
   }
 
+  .computer-shell .timeline-track .timeline-event {
+    grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  }
+
   .computer-shell .timeline-track .timeline-item:not(.timeline-ad) > * {
     grid-column: 1;
   }
@@ -7682,6 +7744,10 @@ select:focus-visible {
     font: 700 11px/1.18 Tahoma, Arial, sans-serif;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
+  }
+
+  .computer-shell .timeline-track .timeline-event h3 {
+    -webkit-line-clamp: 2;
   }
 
   .computer-shell .timeline-track .timeline-ad {
@@ -8061,6 +8127,10 @@ select:focus-visible {
 }
 
 @media (max-width: 900px) {
+  .computer-shell .timeline-section {
+    min-height: 220px;
+  }
+
   .computer-shell .timeline-drop-zone {
     min-width: 72px;
   }
@@ -8082,5 +8152,1231 @@ select:focus-visible {
 @media (max-width: 620px) {
   .computer-shell .event-bank .event-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Pesquisa & Audiência — integrated episode workflow */
+
+.computer-shell .audience-app-content {
+  min-height: 100%;
+  background: var(--surface-alt);
+}
+
+.computer-shell .audience-workflow {
+  margin: 10px 10px 0;
+  border: 1px solid var(--chrome-shadow);
+  border-left: 5px solid var(--accent);
+  background: var(--surface);
+  color: var(--ui-text);
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-hi),
+    inset -1px -1px 0 var(--chrome-dark),
+    3px 3px 0 color-mix(in srgb, var(--chrome-shadow) 28%, transparent);
+  font: 11px/1.35 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .audience-workflow-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+  padding: 14px;
+  border-bottom: 1px solid var(--chrome-shadow);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--title-a) 10%, transparent), transparent 58%),
+    var(--surface);
+}
+
+.computer-shell .audience-workflow-heading > div:first-child {
+  min-width: 0;
+}
+
+.computer-shell .audience-workflow-heading span {
+  color: var(--accent);
+  font: 700 9px/1.2 "Courier New", monospace;
+  letter-spacing: .08em;
+}
+
+.computer-shell .audience-workflow-heading h2 {
+  margin: 4px 0 5px;
+  font: 700 clamp(22px, 3.1vw, 34px)/1 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .audience-workflow-heading p,
+.computer-shell .audience-workflow-footer p {
+  margin: 0;
+  color: var(--ui-muted);
+  font-size: 10px;
+}
+
+.computer-shell .audience-workflow-highlight {
+  min-width: 112px;
+  display: grid;
+  justify-items: end;
+  padding: 8px 11px;
+  border: 2px inset var(--chrome);
+  background: var(--surface-alt);
+}
+
+.computer-shell .audience-workflow-highlight small {
+  color: var(--ui-muted);
+  font: 700 8px "Courier New", monospace;
+}
+
+.computer-shell .audience-workflow-highlight b {
+  color: var(--accent);
+  font: 700 34px/1 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .audience-workflow-highlight span {
+  color: var(--ui-muted);
+  font-size: 9px;
+  letter-spacing: 0;
+}
+
+.computer-shell .audience-workflow-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border: 1px solid var(--chrome-shadow);
+  background: var(--surface-alt);
+}
+
+.computer-shell .audience-workflow-status i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #168447;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #168447 18%, transparent);
+}
+
+.computer-shell .audience-workflow-status span {
+  color: var(--ui-text);
+  letter-spacing: .04em;
+}
+
+.computer-shell .audience-workflow-candidates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--surface-alt);
+}
+
+.computer-shell .audience-workflow-candidates.candidates-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.computer-shell .audience-workflow-candidates article {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 8px;
+  border: 1px solid var(--chrome-shadow);
+  background: var(--surface);
+}
+
+.computer-shell .audience-workflow-candidates article.is-selected {
+  border-left: 5px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+
+.computer-shell .audience-workflow-candidates article > div {
+  min-width: 0;
+  display: grid;
+}
+
+.computer-shell .audience-workflow-candidates article span,
+.computer-shell .audience-workflow-candidates article small {
+  overflow: hidden;
+  color: var(--ui-muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.computer-shell .audience-workflow-candidates article b {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.computer-shell .audience-workflow-candidates article em {
+  padding: 5px 6px;
+  background: var(--chrome);
+  color: var(--ui-muted);
+  font: 700 7px "Courier New", monospace;
+  font-style: normal;
+}
+
+.computer-shell .audience-workflow-candidates article.is-selected em {
+  background: var(--accent);
+  color: #fff;
+}
+
+.computer-shell .audience-workflow-eliminated {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 14px;
+  padding: 9px;
+  border: 1px solid var(--chrome-shadow);
+  background: var(--surface-alt);
+}
+
+.computer-shell .audience-workflow-eliminated > div {
+  display: grid;
+  gap: 2px;
+}
+
+.computer-shell .audience-workflow-eliminated span {
+  color: var(--accent-2);
+  font: 700 8px "Courier New", monospace;
+}
+
+.computer-shell .audience-workflow-eliminated b {
+  font-size: 14px;
+}
+
+.computer-shell .audience-workflow-eliminated small {
+  color: var(--ui-muted);
+  font-size: 9px;
+}
+
+.computer-shell .audience-workflow-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--chrome-shadow);
+  background: var(--chrome);
+}
+
+.computer-shell .audience-workflow-footer .button {
+  flex: 0 0 auto;
+  min-width: 205px;
+}
+
+@media (max-width: 720px) {
+  .computer-shell .audience-workflow {
+    margin: 7px 7px 0;
+  }
+
+  .computer-shell .audience-workflow-heading {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .computer-shell .audience-workflow-highlight {
+    justify-items: start;
+  }
+
+  .computer-shell .audience-workflow-candidates,
+  .computer-shell .audience-workflow-candidates.candidates-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .computer-shell .audience-workflow-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .computer-shell .audience-workflow-footer .button {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+/* Pesquisa & Audiência — cohort report workstation */
+
+.computer-shell .audience-report {
+  --audience-positive: #087a4f;
+  --audience-positive-soft: color-mix(in srgb, #087a4f 13%, var(--surface));
+  --audience-negative: #a4262c;
+  --audience-negative-soft: color-mix(in srgb, #a4262c 12%, var(--surface));
+  --audience-neutral: #5f625f;
+  --audience-curve: #086d9b;
+  min-height: 100%;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 12px;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 23px, color-mix(in srgb, var(--document-rule) 22%, transparent) 23px 24px),
+    var(--surface-alt);
+  color: var(--ui-text);
+  font: 11px/1.35 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell.theme-dark .audience-report {
+  --audience-positive: #61e8aa;
+  --audience-positive-soft: color-mix(in srgb, #61e8aa 13%, var(--surface));
+  --audience-negative: #ff858d;
+  --audience-negative-soft: color-mix(in srgb, #ff858d 12%, var(--surface));
+  --audience-neutral: #b8c6cc;
+  --audience-curve: #45d9ef;
+}
+
+.computer-shell .audience-report h2,
+.computer-shell .audience-report h3,
+.computer-shell .audience-report h4,
+.computer-shell .audience-report p,
+.computer-shell .audience-report dl,
+.computer-shell .audience-report dd,
+.computer-shell .audience-report figure,
+.computer-shell .audience-report ol {
+  margin: 0;
+}
+
+.computer-shell .audience-report-header {
+  min-width: 0;
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 12px 13px;
+  border: 1px solid var(--chrome-shadow);
+  border-left: 5px solid var(--accent);
+  background: var(--surface);
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-hi),
+    inset -1px -1px 0 var(--chrome-dark);
+}
+
+.computer-shell .audience-report-heading {
+  min-width: 0;
+}
+
+.computer-shell .audience-report-kicker {
+  color: var(--accent);
+  font: 700 8px/1.15 "Courier New", monospace;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+}
+
+.computer-shell .audience-report-header h2 {
+  margin-top: 3px;
+  font: 700 clamp(21px, 3vw, 30px)/1 Tahoma, Arial, sans-serif;
+  letter-spacing: -.035em;
+}
+
+.computer-shell .audience-report-episode {
+  margin-top: 5px;
+  color: var(--ui-muted);
+  font: 700 9px/1.25 "Courier New", monospace;
+}
+
+.computer-shell .audience-history-control {
+  width: min(350px, 42%);
+  flex: 0 1 350px;
+}
+
+.computer-shell .audience-history-control label {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--ui-muted);
+  font: 700 8px/1 "Courier New", monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.computer-shell .audience-history-control select {
+  width: 100%;
+  height: 29px;
+  padding: 0 25px 0 7px;
+  border: 2px inset var(--chrome);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--ui-text);
+  font: 10px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .audience-history-control select:focus-visible,
+.computer-shell .audience-table-scroll:focus-visible {
+  outline: 2px dotted var(--ui-text);
+  outline-offset: 2px;
+}
+
+.computer-shell .audience-headlines,
+.computer-shell .audience-checkpoints,
+.computer-shell .audience-cohorts,
+.computer-shell .audience-slices,
+.computer-shell .audience-vote,
+.computer-shell .audience-fandom,
+.computer-shell .audience-drivers,
+.computer-shell .audience-panel-note {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--chrome-shadow);
+  background: var(--surface);
+  box-shadow:
+    inset 1px 1px 0 var(--chrome-hi),
+    inset -1px -1px 0 var(--chrome-dark);
+}
+
+.computer-shell .audience-headlines > h3,
+.computer-shell .audience-section-heading {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  padding: 0 3px 7px;
+  border-bottom: 1px solid var(--document-rule);
+}
+
+.computer-shell .audience-headlines > h3,
+.computer-shell .audience-section-heading h3,
+.computer-shell .audience-panel-note h3 {
+  color: var(--ui-text);
+  font: 700 13px/1.1 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .audience-section-heading p {
+  margin-top: 3px;
+  color: var(--ui-muted);
+  font: 9px/1.3 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .audience-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(96px, 1fr));
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.computer-shell .audience-metric {
+  min-width: 0;
+  min-height: 69px;
+  display: grid;
+  align-content: space-between;
+  padding: 7px 8px;
+  border: 1px solid var(--document-rule);
+  border-top: 3px solid var(--audience-curve);
+  background: var(--surface-alt);
+}
+
+.computer-shell .audience-metric-forecast {
+  grid-column: span 2;
+  border-top-color: var(--accent-2);
+}
+
+.computer-shell .audience-metric dt {
+  color: var(--ui-muted);
+  font: 700 7px/1.1 "Courier New", monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.computer-shell .audience-metric dd {
+  min-width: 0;
+  color: var(--ui-text);
+  font: 700 clamp(17px, 2vw, 23px)/1 "Courier New", monospace;
+  letter-spacing: -.06em;
+  overflow-wrap: anywhere;
+}
+
+.computer-shell .audience-metric-forecast dd {
+  font-size: clamp(14px, 1.7vw, 20px);
+}
+
+.computer-shell .audience-metric dd small {
+  display: block;
+  margin-top: 4px;
+  color: var(--ui-muted);
+  font: 400 8px/1.15 Tahoma, Arial, sans-serif;
+  letter-spacing: 0;
+}
+
+.computer-shell .audience-curve {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--chrome-shadow);
+  background:
+    repeating-linear-gradient(0deg, transparent 0 31px, color-mix(in srgb, var(--document-rule) 44%, transparent) 31px 32px),
+    var(--surface-alt);
+  box-shadow: inset 1px 1px 0 var(--chrome-dark), inset -1px -1px 0 var(--chrome-hi);
+}
+
+.computer-shell .audience-curve figcaption {
+  margin-bottom: 7px;
+  color: var(--ui-muted);
+  font: 8px/1.25 "Courier New", monospace;
+}
+
+.computer-shell .audience-curve-points {
+  min-height: 196px;
+  display: grid;
+  grid-auto-columns: minmax(80px, 1fr);
+  grid-auto-flow: column;
+  align-items: end;
+  gap: 3px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 5px 2px 3px;
+  list-style: none;
+  scrollbar-color: var(--chrome-shadow) var(--chrome);
+}
+
+.computer-shell .audience-curve-point {
+  min-width: 0;
+  height: 180px;
+  padding: 0;
+  border-left: 1px dotted var(--document-rule);
+}
+
+.computer-shell .audience-curve-point:first-child {
+  border-left: 0;
+}
+
+.computer-shell .audience-curve-select {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-rows: minmax(95px, 1fr) auto minmax(28px, auto) auto;
+  justify-items: center;
+  align-items: end;
+  gap: 3px;
+  padding: 3px 5px;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.computer-shell .audience-curve-select:hover {
+  border-color: var(--document-rule);
+  background: color-mix(in srgb, var(--audience-curve) 7%, transparent);
+}
+
+.computer-shell .audience-curve-select[aria-pressed="true"] {
+  border-color: var(--audience-curve);
+  background: color-mix(in srgb, var(--audience-curve) 13%, var(--surface-alt));
+  box-shadow: inset 0 -3px 0 var(--audience-curve);
+}
+
+.computer-shell .audience-curve-select:focus-visible {
+  outline: 2px dotted var(--ui-text);
+  outline-offset: -3px;
+}
+
+.computer-shell .audience-curve-meter {
+  width: 18px;
+  height: 100%;
+  min-height: 95px;
+  border: 1px solid var(--chrome-shadow);
+  border-radius: 0;
+  background: var(--chrome);
+  box-shadow: inset 1px 1px 0 var(--chrome-dark), inset -1px -1px 0 var(--chrome-hi);
+  color: var(--audience-curve);
+  direction: rtl;
+  writing-mode: vertical-lr;
+}
+
+.computer-shell .audience-curve-meter::-webkit-meter-bar {
+  border: 0;
+  border-radius: 0;
+  background: var(--chrome);
+  box-shadow: inset 1px 1px 0 var(--chrome-dark);
+}
+
+.computer-shell .audience-curve-meter::-webkit-meter-optimum-value {
+  border-radius: 0;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 4px, rgba(255, 255, 255, .2) 4px 5px),
+    var(--audience-curve);
+}
+
+.computer-shell .audience-curve-meter::-moz-meter-bar {
+  border-radius: 0;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 4px, rgba(255, 255, 255, .2) 4px 5px),
+    var(--audience-curve);
+}
+
+.computer-shell .audience-curve-value {
+  color: var(--ui-text);
+  font: 700 9px/1 "Courier New", monospace;
+  white-space: nowrap;
+}
+
+.computer-shell .audience-curve-label {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--ui-text);
+  font: 700 8px/1.15 Tahoma, Arial, sans-serif;
+  text-align: center;
+  text-overflow: ellipsis;
+}
+
+.computer-shell .audience-curve-time {
+  color: var(--ui-muted);
+  font: 7px/1 "Courier New", monospace;
+}
+
+.computer-shell .audience-checkpoint-detail {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--audience-curve);
+  background: color-mix(in srgb, var(--audience-curve) 5%, var(--surface));
+}
+
+.computer-shell .audience-checkpoint-detail > header {
+  min-width: 0;
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 7px;
+  border-bottom: 1px dotted var(--document-rule);
+}
+
+.computer-shell .audience-checkpoint-detail > header p,
+.computer-shell .audience-checkpoint-detail h5 {
+  margin: 0;
+  color: var(--ui-muted);
+  font: 700 7px/1.2 "Courier New", monospace;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.computer-shell .audience-checkpoint-detail > header h4 {
+  margin-top: 2px;
+  font-size: 11px;
+}
+
+.computer-shell .audience-checkpoint-detail > header code {
+  max-width: 48%;
+  overflow-wrap: anywhere;
+  color: var(--audience-curve);
+  font: 700 8px/1.25 "Courier New", monospace;
+  text-align: right;
+}
+
+.computer-shell .audience-checkpoint-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.computer-shell .audience-checkpoint-detail-grid > section {
+  min-width: 0;
+  padding: 7px;
+  border: 1px solid var(--document-rule);
+  background: var(--surface-alt);
+}
+
+.computer-shell .audience-checkpoint-detail-grid > section > p {
+  margin-top: 5px;
+  color: var(--ui-muted);
+  font: 8px/1.3 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .audience-checkpoint-cohort-list {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.computer-shell .audience-checkpoint-cohort-list li {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 6px 7px;
+  border: 1px solid var(--document-rule);
+  background: var(--surface);
+}
+
+.computer-shell .audience-checkpoint-cohort-list span {
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.computer-shell .audience-checkpoint-cohort-list data {
+  font: 700 9px/1.2 "Courier New", monospace;
+}
+
+.computer-shell .audience-table-scroll {
+  max-width: 100%;
+  margin-top: 8px;
+  overflow: auto;
+  border: 1px solid var(--chrome-shadow);
+  background: var(--surface);
+  box-shadow: inset 1px 1px 0 var(--chrome-dark), inset -1px -1px 0 var(--chrome-hi);
+  scrollbar-color: var(--chrome-shadow) var(--chrome);
+}
+
+.computer-shell .audience-table {
+  width: 100%;
+  min-width: 710px;
+  border-spacing: 0;
+  border-collapse: separate;
+  color: var(--ui-text);
+  font: 9px/1.3 Tahoma, Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.computer-shell .audience-table caption {
+  padding: 5px 7px;
+  border-bottom: 1px solid var(--chrome-shadow);
+  background: var(--chrome);
+  color: var(--ui-muted);
+  font: 700 7px/1.2 "Courier New", monospace;
+  letter-spacing: .05em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.computer-shell .audience-table th,
+.computer-shell .audience-table td {
+  padding: 7px 8px;
+  border-right: 1px solid var(--document-rule);
+  border-bottom: 1px solid var(--document-rule);
+  text-align: right;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.computer-shell .audience-table tr > :last-child {
+  border-right: 0;
+}
+
+.computer-shell .audience-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.computer-shell .audience-table thead th {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  background: var(--chrome);
+  color: var(--ui-text);
+  box-shadow: inset 0 1px 0 var(--chrome-hi), inset 0 -1px 0 var(--chrome-shadow);
+  font: 700 8px/1.15 "Courier New", monospace;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.computer-shell .audience-table thead th:first-child,
+.computer-shell .audience-table tbody th {
+  text-align: left;
+}
+
+.computer-shell .audience-table tbody th {
+  min-width: 170px;
+  background: color-mix(in srgb, var(--surface-alt) 62%, var(--surface));
+  color: var(--ui-text);
+  font-weight: 700;
+  white-space: normal;
+}
+
+.computer-shell .audience-table tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--surface-alt) 64%, var(--surface));
+}
+
+.computer-shell .audience-table tbody tr:hover > * {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+
+.computer-shell .audience-table td small,
+.computer-shell .audience-table th small {
+  display: block;
+  margin-top: 2px;
+  color: var(--ui-muted);
+  font: 7px/1.2 "Courier New", monospace;
+  white-space: normal;
+}
+
+.computer-shell .audience-delta-positive {
+  background: var(--audience-positive-soft);
+  color: var(--audience-positive);
+  font-weight: 700;
+}
+
+.computer-shell .audience-delta-positive::before {
+  content: "▲ ";
+}
+
+.computer-shell .audience-delta-negative {
+  background: var(--audience-negative-soft);
+  color: var(--audience-negative);
+  font-weight: 700;
+}
+
+.computer-shell .audience-delta-negative::before {
+  content: "▼ ";
+}
+
+.computer-shell .audience-delta-neutral {
+  color: var(--audience-neutral);
+}
+
+.computer-shell .audience-delta-neutral::before {
+  content: "— ";
+}
+
+.computer-shell .audience-return-transition {
+  display: inline-block;
+  padding: 2px 4px;
+  border: 1px solid var(--document-rule);
+  background: var(--surface-alt);
+  font: 700 8px/1.15 "Courier New", monospace;
+}
+
+.computer-shell .audience-slice-heading {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.computer-shell .audience-slice-control {
+  width: min(250px, 40%);
+  flex: 0 1 250px;
+}
+
+.computer-shell .audience-slice-control label {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--ui-muted);
+  font: 700 7px/1 "Courier New", monospace;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.computer-shell .audience-slice-control select {
+  width: 100%;
+  height: 27px;
+  padding: 0 24px 0 6px;
+  border: 2px inset var(--chrome);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--ui-text);
+  font: 9px Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .audience-slice-control select:focus-visible {
+  outline: 2px dotted var(--ui-text);
+  outline-offset: 2px;
+}
+
+.computer-shell .audience-derived-note {
+  margin-top: 7px;
+  padding: 6px 8px;
+  border-left: 3px solid var(--accent-2);
+  background: var(--surface-alt);
+  color: var(--ui-muted);
+  font: 8px/1.4 "Courier New", monospace;
+}
+
+.computer-shell .audience-vote-summary {
+  display: grid;
+  grid-template-columns: minmax(180px, .65fr) minmax(0, 1.35fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.computer-shell .audience-vote-summary > div,
+.computer-shell .audience-vote-summary dl {
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--document-rule);
+  background: var(--surface-alt);
+}
+
+.computer-shell .audience-vote-summary > div {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  border-left: 4px solid var(--accent);
+}
+
+.computer-shell .audience-vote-summary > div strong {
+  font-size: 11px;
+}
+
+.computer-shell .audience-vote-summary > div span {
+  color: var(--accent);
+  font: 700 8px/1.2 "Courier New", monospace;
+  text-transform: uppercase;
+}
+
+.computer-shell .audience-vote-summary dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.computer-shell .audience-vote-summary dt {
+  color: var(--ui-muted);
+  font: 700 7px/1.15 "Courier New", monospace;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.computer-shell .audience-vote-summary dd {
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+  font: 700 9px/1.25 "Courier New", monospace;
+}
+
+.computer-shell .audience-vote-selected > * {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface)) !important;
+  color: var(--ui-text);
+  font-weight: 700;
+}
+
+.computer-shell .audience-driver-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.computer-shell .audience-driver-group {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--document-rule);
+  background: var(--surface-alt);
+}
+
+.computer-shell .audience-driver-group h4 {
+  padding-bottom: 6px;
+  border-bottom: 1px dotted var(--document-rule);
+  font: 700 10px/1.1 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .audience-driver-list {
+  display: grid;
+  gap: 5px;
+  margin-top: 6px;
+  padding: 0;
+  list-style: none;
+  counter-reset: audience-driver;
+}
+
+.computer-shell .audience-driver {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  padding: 7px 8px 7px 27px;
+  border: 1px solid var(--document-rule);
+  background: var(--surface);
+  counter-increment: audience-driver;
+}
+
+.computer-shell .audience-driver::before {
+  content: counter(audience-driver);
+  position: absolute;
+  left: 7px;
+  top: 7px;
+  width: 14px;
+  height: 14px;
+  display: grid;
+  place-items: center;
+  border: 1px solid currentColor;
+  font: 700 7px/1 "Courier New", monospace;
+}
+
+.computer-shell .audience-driver-positive {
+  border-left: 4px solid var(--audience-positive);
+}
+
+.computer-shell .audience-driver-negative {
+  border-left: 4px solid var(--audience-negative);
+}
+
+.computer-shell .audience-driver-positive::before,
+.computer-shell .audience-driver-positive .audience-driver-value {
+  color: var(--audience-positive);
+}
+
+.computer-shell .audience-driver-negative::before,
+.computer-shell .audience-driver-negative .audience-driver-value {
+  color: var(--audience-negative);
+}
+
+.computer-shell .audience-driver-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.computer-shell .audience-driver-value {
+  font: 700 10px/1.2 "Courier New", monospace;
+}
+
+.computer-shell .audience-driver-context {
+  grid-column: 1 / -1;
+  color: var(--ui-muted);
+  font: 7px/1.2 "Courier New", monospace;
+}
+
+.computer-shell .audience-driver-empty,
+.computer-shell .audience-section-empty {
+  padding: 12px;
+  border: 1px dashed var(--document-rule);
+  background: var(--surface-alt);
+  color: var(--ui-muted);
+  font: 9px/1.35 "Courier New", monospace;
+}
+
+.computer-shell .audience-driver-empty {
+  margin-top: 6px;
+}
+
+.computer-shell .audience-section-empty {
+  margin-top: 8px;
+}
+
+.computer-shell .audience-panel-note {
+  border-left: 5px solid var(--accent-2);
+  background:
+    repeating-linear-gradient(-45deg, transparent 0 8px, color-mix(in srgb, var(--accent-2) 5%, transparent) 8px 9px),
+    var(--surface);
+}
+
+.computer-shell .audience-panel-note h3 {
+  margin-bottom: 5px;
+}
+
+.computer-shell .audience-panel-note p,
+.computer-shell .audience-panel-disclosure {
+  color: var(--ui-muted);
+  font: 8px/1.4 "Courier New", monospace;
+}
+
+.computer-shell .audience-panel-note p + p {
+  margin-top: 5px;
+}
+
+.computer-shell .audience-panel-note strong {
+  color: var(--ui-text);
+}
+
+.computer-shell .audience-report-empty {
+  grid-template-rows: auto minmax(180px, 1fr) auto;
+}
+
+.computer-shell .audience-empty-state {
+  min-height: 180px;
+  display: grid;
+  place-content: center;
+  gap: 7px;
+  padding: 24px;
+  border: 2px inset var(--chrome);
+  background: var(--surface);
+  text-align: center;
+}
+
+.computer-shell .audience-empty-state h3 {
+  font: 700 16px/1.1 Tahoma, Arial, sans-serif;
+}
+
+.computer-shell .audience-empty-state p {
+  max-width: 540px;
+  color: var(--ui-muted);
+  font-size: 10px;
+}
+
+.computer-shell .audience-report-empty > .audience-panel-disclosure {
+  padding: 8px 10px;
+  border: 1px solid var(--chrome-shadow);
+  background: var(--chrome);
+}
+
+@media (max-width: 980px) {
+  .computer-shell .audience-metric-grid {
+    grid-template-columns: repeat(4, minmax(100px, 1fr));
+  }
+
+  .computer-shell .audience-metric-forecast {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 720px) {
+  .computer-shell .audience-report {
+    gap: 7px;
+    padding: 7px;
+    font-size: 10px;
+  }
+
+  .computer-shell .audience-report-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 9px;
+    padding: 10px;
+  }
+
+  .computer-shell .audience-report-header h2 {
+    font-size: 22px;
+  }
+
+  .computer-shell .audience-history-control {
+    width: 100%;
+    flex-basis: auto;
+  }
+
+  .computer-shell .audience-headlines,
+  .computer-shell .audience-checkpoints,
+  .computer-shell .audience-cohorts,
+  .computer-shell .audience-slices,
+  .computer-shell .audience-vote,
+  .computer-shell .audience-fandom,
+  .computer-shell .audience-drivers,
+  .computer-shell .audience-panel-note {
+    padding: 8px;
+  }
+
+  .computer-shell .audience-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .computer-shell .audience-metric {
+    min-height: 64px;
+  }
+
+  .computer-shell .audience-metric dd,
+  .computer-shell .audience-metric-forecast dd {
+    font-size: 17px;
+  }
+
+  .computer-shell .audience-curve-points {
+    grid-auto-columns: 76px;
+  }
+
+  .computer-shell .audience-driver-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .computer-shell .audience-checkpoint-detail-grid,
+  .computer-shell .audience-vote-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .computer-shell .audience-slice-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .computer-shell .audience-slice-control {
+    width: 100%;
+    flex-basis: auto;
+  }
+
+  .computer-shell .audience-table {
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 430px) {
+  .computer-shell .audience-metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .computer-shell .audience-metric-forecast {
+    grid-column: auto;
+  }
+
+  .computer-shell .audience-section-heading p {
+    font-size: 8px;
+  }
+
+  .computer-shell .audience-driver {
+    grid-template-columns: 1fr;
+  }
+
+  .computer-shell .audience-driver-value {
+    margin-top: 2px;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .computer-shell .audience-report {
+    --audience-positive: #006b38;
+    --audience-negative: #8e0010;
+    --audience-curve: #004f85;
+  }
+
+  .computer-shell.theme-dark .audience-report {
+    --audience-positive: #7dffba;
+    --audience-negative: #ff9da4;
+    --audience-curve: #7cecff;
+  }
+
+  .computer-shell .audience-report-header,
+  .computer-shell .audience-headlines,
+  .computer-shell .audience-checkpoints,
+  .computer-shell .audience-cohorts,
+  .computer-shell .audience-slices,
+  .computer-shell .audience-vote,
+  .computer-shell .audience-fandom,
+  .computer-shell .audience-drivers,
+  .computer-shell .audience-panel-note,
+  .computer-shell .audience-table-scroll,
+  .computer-shell .audience-driver,
+  .computer-shell .audience-metric {
+    border-width: 2px;
+  }
+}
+
+@media (forced-colors: active) {
+  .computer-shell .audience-report,
+  .computer-shell .audience-curve,
+  .computer-shell .audience-metric,
+  .computer-shell .audience-driver,
+  .computer-shell .audience-panel-note {
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .computer-shell .audience-report-header,
+  .computer-shell .audience-headlines,
+  .computer-shell .audience-checkpoints,
+  .computer-shell .audience-cohorts,
+  .computer-shell .audience-slices,
+  .computer-shell .audience-vote,
+  .computer-shell .audience-fandom,
+  .computer-shell .audience-drivers,
+  .computer-shell .audience-panel-note,
+  .computer-shell .audience-table-scroll,
+  .computer-shell .audience-driver,
+  .computer-shell .audience-metric {
+    border: 1px solid CanvasText;
+    box-shadow: none;
+  }
+
+  .computer-shell .audience-driver-positive,
+  .computer-shell .audience-delta-positive {
+    border-left: 5px double CanvasText;
+  }
+
+  .computer-shell .audience-driver-negative,
+  .computer-shell .audience-delta-negative {
+    border-left: 5px dashed CanvasText;
+  }
+
+  .computer-shell .audience-curve-meter {
+    forced-color-adjust: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .computer-shell .audience-report *,
+  .computer-shell .audience-report *::before,
+  .computer-shell .audience-report *::after {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
   }
 }

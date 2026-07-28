@@ -12,6 +12,10 @@ import { reduceGame } from "../game/reducer";
 import { createRng, nextRandom } from "../game/rng";
 import { selectActiveCast } from "../game/selectors/active-cast";
 import { selectAvailableFootage } from "../game/selectors/episode-bank";
+import {
+  isRequiredEpisodeFootage,
+  toEpisodeFootageView,
+} from "../game/selectors/event-view";
 import { selectAudienceForecast } from "../game/selectors/audience-forecast";
 import { selectFeedEvents } from "../game/selectors/feed";
 import { simulateSeasons } from "../game/simulator";
@@ -26,7 +30,9 @@ import {
   firstEmptyProgramZoneIndex,
   insertIntoFirstEmptyProgramZone,
   moveTimelineItem,
+  reconcileTimelineWithCanonicalHistory,
   removeEditorialTimelineItem,
+  selectEditorEpisodeBank,
   validateEditorCut,
 } from "../app/editor-analysis";
 
@@ -73,6 +79,47 @@ test("editor timeline keeps four movable, non-removable ads and fills program zo
   assert.equal(removeEditorialTimelineItem(withSecond, "ad-1").filter((item) => item.kind === "ad").length, 4);
   assert.equal(removeEditorialTimelineItem(withSecond, "event-1").some((item) => item.id === "event-1"), false);
   assert.deepEqual(moveTimelineItem(ads, 0, 1).map((item) => item.id), ["ad-2", "ad-1", "ad-3", "ad-4"]);
+});
+
+test("non-legacy editor banks and restored timelines remain canonical", () => {
+  const canonical = [{ id: "event-canonical", kind: "event" }];
+  const legacy = [{ id: "melhores-semana", kind: "event" }];
+  assert.strictEqual(
+    selectEditorEpisodeBank(canonical, legacy, {
+      requiresCanonicalHistory: true,
+      dynamicEngine: false,
+    }),
+    canonical,
+    "shadow/clustered broadcasts must not fall back when only one canonical event exists",
+  );
+  assert.strictEqual(
+    selectEditorEpisodeBank(canonical, legacy, {
+      requiresCanonicalHistory: false,
+      dynamicEngine: false,
+    }),
+    legacy,
+    "the legacy adapter retains its decorative catalog",
+  );
+
+  const restored = [
+    { id: "intervalo-1", kind: "ad" },
+    legacy[0],
+    canonical[0],
+    { id: "important-chain", kind: "important-event" },
+  ];
+  const reconciled = reconcileTimelineWithCanonicalHistory(
+    restored,
+    canonical.map((event) => event.id),
+  );
+  assert.deepEqual(
+    reconciled.map((item) => item.id),
+    ["intervalo-1", "event-canonical", "important-chain"],
+  );
+  assert.strictEqual(
+    reconcileTimelineWithCanonicalHistory(reconciled, ["event-canonical"]),
+    reconciled,
+    "an already-clean timeline should retain its identity",
+  );
 });
 
 test("editor validation blocks only editorial count and missing required events", () => {
@@ -245,6 +292,45 @@ test("episode bank uses unique event instances and preserves frozen historical a
     .some((event) => event.actorIds.includes(historicalActor)));
 });
 
+test("editor requirements are episode-scoped and individual ballots stay optional", () => {
+  let state = command(
+    createInitialState("episode-requirements", "dynamic", "legacy"),
+    { type: "START_SEASON", seed: "episode-requirements" },
+  );
+  state = command(state, { type: "CONFIRM_CHALLENGE", challengeType: "sorte" });
+  state = command(state, { type: "FORM_NOMINATION" });
+
+  const challenge = state.house.eventHistory.find(
+    (event) => event.templateId === "anchor:challenge-result",
+  );
+  const nomination = state.house.eventHistory.find(
+    (event) => event.templateId === "anchor:nomination-result",
+  );
+  const ballot = state.house.eventHistory.find(
+    (event) => event.templateId === "anchor:house-ballot",
+  );
+  assert.ok(challenge);
+  assert.ok(nomination);
+  assert.ok(ballot);
+
+  const eliminationResult = { ...nomination, templateId: "anchor:elimination-result" };
+  const farewell = { ...nomination, templateId: "anchor:farewell" };
+  const finalistSpeech = { ...nomination, templateId: "anchor:finalist-speech" };
+  const retrospective = { ...nomination, templateId: "anchor:season-retrospective" };
+
+  assert.equal(isRequiredEpisodeFootage(challenge, "premiere"), true);
+  assert.equal(isRequiredEpisodeFootage(challenge, "challenge"), true);
+  assert.equal(isRequiredEpisodeFootage(nomination, "vote"), true);
+  assert.equal(isRequiredEpisodeFootage(ballot, "vote"), false);
+  assert.equal(isRequiredEpisodeFootage(nomination, "elimination"), false);
+  assert.equal(isRequiredEpisodeFootage(ballot, "elimination"), false);
+  assert.equal(isRequiredEpisodeFootage(eliminationResult, "elimination"), true);
+  assert.equal(isRequiredEpisodeFootage(farewell, "elimination"), true);
+  assert.equal(isRequiredEpisodeFootage(finalistSpeech, "final"), true);
+  assert.equal(isRequiredEpisodeFootage(retrospective, "final"), true);
+  assert.equal(toEpisodeFootageView(ballot, "elimination").requiredAnchor, false);
+});
+
 test("serialized saves restore the exact event queue and RNG state", () => {
   let state = command(createInitialState("save", "dynamic"), { type: "START_SEASON", seed: "save" });
   state = command(state, { type: "CONFIRM_CHALLENGE", challengeType: "resistencia" });
@@ -324,6 +410,9 @@ test("nominations store individual relationship-driven ballots and editable moti
   const ballotFootage = selectAvailableFootage(state, { week: 1, episodeKind: "elimination" })
     .filter((event) => event.templateId === "anchor:house-ballot");
   assert.equal(ballotFootage.length, nomination.ballots.length);
+  assert.ok(ballotFootage.every(
+    (event) => !toEpisodeFootageView(event, "elimination").requiredAnchor,
+  ));
 });
 
 test("changing a leader relationship changes the nomination target", () => {
@@ -355,7 +444,7 @@ test("changing a leader relationship changes the nomination target", () => {
 });
 
 test("elimination is immutable, resolves impossible threads, and preserves farewell footage", () => {
-  let state = command(createInitialState("aftermath", "dynamic"), { type: "START_SEASON", seed: "aftermath" });
+  let state = command(createInitialState("aftermath", "dynamic", "shadow"), { type: "START_SEASON", seed: "aftermath" });
   state = command(state, { type: "CONFIRM_CHALLENGE", challengeType: "atencao" });
   state = command(state, { type: "FORM_NOMINATION" });
   const eliminatedId = state.competition.nomineeIds[0];
@@ -381,7 +470,7 @@ test("elimination is immutable, resolves impossible threads, and preserves farew
 
 test("the third elimination transitions all survivors to finalists", () => {
   const state = (() => {
-    let current = command(createInitialState("final-transition", "dynamic"), {
+    let current = command(createInitialState("final-transition", "dynamic", "shadow"), {
       type: "START_SEASON",
       seed: "final-transition",
     });
@@ -453,7 +542,7 @@ test("versioned saves preserve action logs and migrate schema version one", () =
   delete legacy.snapshot.competition.eliminationHistory;
   delete legacy.snapshot.narrative.publicStorylines;
   const migrated = deserializeSeason(JSON.stringify(legacy));
-  assert.equal(migrated?.schemaVersion, 2);
+  assert.equal(migrated?.schemaVersion, 3);
   assert.deepEqual(migrated?.snapshot.competition.nominationHistory, []);
   assert.deepEqual(migrated?.snapshot.narrative.publicStorylines, {});
 });
@@ -528,7 +617,7 @@ test("future save versions fail safely and normal saves stay compact", () => {
 
 test("final editor receives speeches and retrospective footage", () => {
   const state = (() => {
-    let current = command(createInitialState("final-footage", "dynamic"), {
+    let current = command(createInitialState("final-footage", "dynamic", "shadow"), {
       type: "START_SEASON",
       seed: "final-footage",
     });

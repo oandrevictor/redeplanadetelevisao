@@ -1,14 +1,102 @@
 import type { CommandResult, GameCommand } from "./commands";
+import {
+  closeAudienceVote,
+  consumePendingAudienceVote,
+  deriveLegacyAudienceSummaries,
+  simulateAudienceEpisode,
+} from "./audience";
+import { deriveAudienceSignals, neutralPortrayals } from "./audience/signals";
 import { castById } from "./content/cast";
 import { generateWindow } from "./engine/generate-window";
 import { assertInvariants } from "./invariants";
 import { nextRandom } from "./rng";
 import { selectActiveCast } from "./selectors/active-cast";
 import { selectAudienceForecast } from "./selectors/audience-forecast";
+import { selectLegacyAudienceVoteChoice } from "./selectors/legacy-audience-vote";
 import { createInitialState } from "./state";
-import type { GameState, ParticipantId } from "./types";
+import type { AudienceInterest, BroadcastEpisode, GameState, ParticipantId } from "./types";
 
 const clamp = (value: number) => Math.min(100, Math.max(0, value));
+
+function syncLegacyAudience(state: GameState): void {
+  const summaries = deriveLegacyAudienceSummaries(state.audienceModel, state.castOrder);
+  for (const participantId of state.castOrder) {
+    if (state.characters[participantId] && summaries[participantId]) {
+      state.characters[participantId].audience = summaries[participantId];
+    }
+  }
+}
+
+function latestAudienceEpisodeId(
+  state: GameState,
+  kind: "vote" | "final",
+): string | null {
+  return [...state.broadcasts].reverse().find((broadcast) =>
+    broadcast.week === state.clock.week
+    && broadcast.episode?.kind === kind
+    && broadcast.result)?.result?.episodeId ?? null;
+}
+
+function broadcastProvenanceError(state: GameState, episode: BroadcastEpisode): string | null {
+  const canonicalEvents = new Map(state.house.eventHistory.map((event) => [event.id, event]));
+  for (const segment of episode.segments) {
+    if (segment.kind === "commercial") continue;
+    if (segment.kind === "important_event") {
+      if (
+        segment.sourceBeatIds.some((beatId) => !beatId.startsWith(`${segment.chainId}-beat-`))
+        || new Set(segment.sourceBeatIds).size !== segment.sourceBeatIds.length
+      ) {
+        return `Important segment ${segment.id} does not reference a frozen canonical beat sequence.`;
+      }
+      continue;
+    }
+    const canonical = canonicalEvents.get(segment.sourceEventId);
+    if (!canonical) {
+      return `Content segment ${segment.id} references footage outside canonical season history.`;
+    }
+    const visibleIds = [...segment.participantIds].sort();
+    const canonicalIds = [...canonical.actorIds].sort();
+    if (
+      visibleIds.length !== canonicalIds.length
+      || visibleIds.some((participantId, index) => participantId !== canonicalIds[index])
+    ) {
+      return `Content segment ${segment.id} changes the frozen visible participants.`;
+    }
+    const signalKeys = new Set([
+      ...Object.keys(canonical.audienceSignals),
+      ...Object.keys(segment.signals),
+    ] as AudienceInterest[]);
+    for (const interest of signalKeys) {
+      if ((canonical.audienceSignals[interest] ?? 0) !== (segment.signals[interest] ?? 0)) {
+        return `Content segment ${segment.id} changes frozen audience signal ${interest}.`;
+      }
+    }
+    const canonicalEliminatedId = canonical.templateId === "anchor:elimination-result"
+      ? canonical.roleBindings.eliminated?.[0]
+      : undefined;
+    if (segment.revealsEliminatedParticipantId !== canonicalEliminatedId) {
+      return `Content segment ${segment.id} changes its canonical elimination reveal.`;
+    }
+  }
+
+  if (episode.kind === "elimination") {
+    const revealIds = episode.segments.flatMap((segment) =>
+      segment.kind === "content" && segment.revealsEliminatedParticipantId
+        ? [segment.revealsEliminatedParticipantId]
+        : []);
+    const expectedEliminatedId = state.audienceModel.mode === "clustered"
+      ? state.audienceModel.pendingVote?.kind === "elimination"
+        ? state.audienceModel.pendingVote.selectedParticipantId
+        : null
+      : state.competition.nomineeIds.find(
+        (participantId) => state.characters[participantId]?.flags.audienceResult === true,
+      ) ?? null;
+    if (revealIds.length !== 1 || !expectedEliminatedId || revealIds[0] !== expectedEliminatedId) {
+      return "An elimination broadcast must contain exactly one canonical reveal matching the locked result.";
+    }
+  }
+  return null;
+}
 
 function sharedAllianceLoyalty(state: GameState, fromId: ParticipantId, toId: ParticipantId): number {
   return Object.values(state.alliances).some((alliance) =>
@@ -43,6 +131,8 @@ function appendChallengeAnchor(
     category: "Prova",
     duration: 8,
     heat: 88,
+    audienceSignals: deriveAudienceSignals("Prova", ["challenge"]),
+    observablePortrayals: neutralPortrayals(standings.map((standing) => standing.participantId)),
     effects: [],
     scoreBreakdown: { mandatoryAnchor: 100 },
   });
@@ -100,8 +190,6 @@ function formNomination(state: GameState): CommandResult {
       - (relationship.trust + relationship.affinity + relationship.strategicAlignment)
         * (0.35 + leaderProfile.personalityTraits.lealdade * 0.08)
       - sharedAllianceLoyalty(next, leaderId, targetId) * (0.6 + leaderProfile.personalityTraits.lealdade * 0.15)
-      + (target.audience.controversy - target.audience.support * 0.25)
-        * leaderProfile.personalityTraits.conscienciaDasCameras * 0.08
     );
   };
   const leaderTargetId = activeIds
@@ -209,6 +297,8 @@ function appendNominationFootage(state: GameState): void {
       category: "Votação",
       duration: templateId === "anchor:nomination-result" ? 6 : 3,
       heat,
+      audienceSignals: deriveAudienceSignals("Votação", ["strategy", "nominee"]),
+      observablePortrayals: neutralPortrayals(actorIds),
       effects: [],
       scoreBreakdown: { mandatoryAnchor: templateId.startsWith("anchor:") ? 100 : 0 },
     });
@@ -240,7 +330,11 @@ function eliminate(state: GameState, participantId: ParticipantId): CommandResul
   const next = structuredClone(state);
   const nomineeIds = [...next.competition.nomineeIds];
   next.clock.window = "elimination";
-  appendEliminationFootage(next, participantId, nomineeIds);
+  const revealAlreadyRecorded = next.house.eventHistory.some((event) =>
+    event.occurredAt.week === next.clock.week
+    && event.templateId === "anchor:elimination-result"
+    && event.roleBindings.eliminated?.includes(participantId));
+  if (!revealAlreadyRecorded) appendEliminationFootage(next, participantId, nomineeIds);
   next.characters[participantId].status = "eliminated";
   next.competition.eliminatedIds.push(participantId);
   next.competition.eliminationHistory.push({
@@ -301,6 +395,8 @@ function appendEliminationFootage(
       category: "Memória",
       duration,
       heat: 90,
+      audienceSignals: deriveAudienceSignals("Memória", ["aftermath"]),
+      observablePortrayals: neutralPortrayals(actorIds),
       effects: [],
       scoreBreakdown: { mandatoryAnchor: 100 },
     });
@@ -341,6 +437,8 @@ function appendFinalFootage(state: GameState, finalistIds: ParticipantId[]): voi
       category: "Memória",
       duration: 6,
       heat: 90,
+      audienceSignals: deriveAudienceSignals("Memória", ["aftermath", "redemption"]),
+      observablePortrayals: neutralPortrayals([finalistId]),
       effects: [],
       scoreBreakdown: { mandatoryAnchor: 100 },
     });
@@ -363,6 +461,8 @@ function appendFinalFootage(state: GameState, finalistIds: ParticipantId[]): voi
     category: "Memória",
     duration: 8,
     heat: 96,
+    audienceSignals: deriveAudienceSignals("Memória", ["callback", "aftermath"]),
+    observablePortrayals: neutralPortrayals(finalistIds),
     effects: [],
     scoreBreakdown: { mandatoryAnchor: 100 },
   });
@@ -373,7 +473,9 @@ export function reduceGame(state: GameState, command: GameCommand): CommandResul
   let result: CommandResult;
   switch (command.type) {
     case "START_SEASON":
-      result = { state: generateWindow(createInitialState(command.seed, state.mode)) };
+      result = {
+        state: generateWindow(createInitialState(command.seed, state.mode, state.audienceModel.mode)),
+      };
       break;
     case "SELECT_CHALLENGE": {
       const next = structuredClone(state);
@@ -409,9 +511,108 @@ export function reduceGame(state: GameState, command: GameCommand): CommandResul
       }
       break;
     }
-    case "RESOLVE_ELIMINATION":
-      result = eliminate(state, command.participantId);
+    case "CLOSE_AUDIENCE_VOTE": {
+      const lockingEpisodeId = state.audienceModel.mode === "legacy"
+        ? null
+        : latestAudienceEpisodeId(state, "vote");
+      if (state.audienceModel.mode !== "legacy" && !lockingEpisodeId) {
+        result = invalid(state, "A clustered broadcast is required before closing the audience vote.");
+      } else if (state.competition.nomineeIds.length < 2) {
+        result = invalid(state, "At least two nominees are required to close the audience vote.");
+      } else {
+        try {
+          const next = structuredClone(state);
+          let authoritativeParticipantId = selectLegacyAudienceVoteChoice(
+            next,
+            "elimination",
+            next.competition.nomineeIds,
+          );
+          if (next.audienceModel.mode !== "legacy" && lockingEpisodeId) {
+            const closed = closeAudienceVote(next.audienceModel, {
+              kind: "elimination",
+              week: next.clock.week,
+              participantIds: next.competition.nomineeIds,
+              lockedAfterEpisodeId: lockingEpisodeId,
+            });
+            next.audienceModel = closed.audience;
+            if (next.audienceModel.mode === "clustered") {
+              authoritativeParticipantId = closed.result.selectedParticipantId;
+            }
+          }
+          if (!authoritativeParticipantId) {
+            result = invalid(state, "Unable to determine the audience result.");
+            break;
+          }
+          next.characters[authoritativeParticipantId].flags.audienceResult = true;
+          next.clock.window = "elimination";
+          appendEliminationFootage(
+            next,
+            authoritativeParticipantId,
+            next.competition.nomineeIds,
+          );
+          result = { state: next };
+        } catch (error) {
+          result = invalid(state, error instanceof Error ? error.message : "Unable to close the audience vote.");
+        }
+      }
       break;
+    }
+    case "RESOLVE_ELIMINATION": {
+      if (state.audienceModel.mode === "clustered" && !state.audienceModel.pendingVote) {
+        result = invalid(state, "A locked clustered audience vote is required to resolve elimination.");
+        break;
+      }
+      const lockedParticipantId = state.audienceModel.pendingVote?.kind === "elimination"
+        ? state.audienceModel.pendingVote.selectedParticipantId
+        : null;
+      if (
+        lockedParticipantId
+        && (
+          !state.competition.nomineeIds.includes(lockedParticipantId)
+          || state.characters[lockedParticipantId]?.status !== "active"
+        )
+      ) {
+        result = invalid(state, "The locked audience result is no longer a valid active nominee.");
+        break;
+      }
+      let participantId = command.participantId;
+      let sourceState = state;
+      if (
+        state.audienceModel.mode === "clustered"
+        && state.audienceModel.pendingVote?.kind === "elimination"
+      ) {
+        try {
+          const consumed = consumePendingAudienceVote(state.audienceModel, "elimination");
+          participantId = consumed.result.selectedParticipantId;
+          sourceState = structuredClone(state);
+          sourceState.audienceModel = consumed.audience;
+        } catch (error) {
+          result = invalid(state, error instanceof Error ? error.message : "Unable to resolve the audience vote.");
+          break;
+        }
+      } else if (
+        state.audienceModel.mode === "shadow"
+        && state.audienceModel.pendingVote?.kind === "elimination"
+      ) {
+        try {
+          const consumed = consumePendingAudienceVote(state.audienceModel, "elimination");
+          sourceState = structuredClone(state);
+          sourceState.audienceModel = consumed.audience;
+        } catch (error) {
+          result = invalid(state, error instanceof Error ? error.message : "Unable to archive the shadow audience vote.");
+          break;
+        }
+      }
+      participantId ??= state.competition.nomineeIds.find(
+        (candidateId) => state.characters[candidateId]?.flags.audienceResult === true,
+      );
+      if (!participantId) {
+        result = invalid(state, "A locked audience vote is required to resolve elimination.");
+      } else {
+        result = eliminate(sourceState, participantId);
+      }
+      break;
+    }
     case "BROADCAST_EPISODE": {
       const eventIds = new Set(state.house.eventHistory.map((event) => event.id));
       if (command.cuts.some((cut) => !eventIds.has(cut.eventInstanceId))) {
@@ -476,9 +677,60 @@ export function reduceGame(state: GameState, command: GameCommand): CommandResul
       }
       break;
     }
+    case "AIR_EPISODE": {
+      if (state.broadcasts.some((broadcast) => broadcast.result?.episodeId === command.episode.id)) {
+        result = invalid(state, `Audience episode ${command.episode.id} has already aired.`);
+        break;
+      }
+      if (command.episode.week !== state.clock.week) {
+        result = invalid(state, "A broadcast episode must belong to the current week.");
+        break;
+      }
+      const provenanceError = broadcastProvenanceError(state, command.episode);
+      if (provenanceError) {
+        result = invalid(state, provenanceError);
+        break;
+      }
+      try {
+        const simulated = simulateAudienceEpisode({
+          audience: state.audienceModel,
+          episode: command.episode,
+          rng: state.rng,
+          participantIds: state.castOrder,
+          eligibleFavoriteParticipantIds: selectActiveCast(state),
+        });
+        const next = structuredClone(state);
+        next.audienceModel = simulated.audience;
+        next.rng = simulated.rng;
+        const audienceResult = simulated.result;
+        if (next.audienceModel.mode === "clustered") syncLegacyAudience(next);
+        const cuts = command.episode.segments.flatMap((segment) =>
+          segment.kind === "content"
+            ? [{
+                eventInstanceId: segment.sourceEventId,
+                perspectiveIds: [...segment.perspectiveIds],
+                tone: segment.tone,
+              }]
+            : []);
+        next.broadcasts.push({
+          week: command.episode.week,
+          cuts,
+          audienceForecast: audienceResult.forecast.expected,
+          detailLevel: "clustered",
+          episode: structuredClone(command.episode),
+          result: audienceResult,
+        });
+        result = { state: next };
+      } catch (error) {
+        result = invalid(state, error instanceof Error ? error.message : "Unable to simulate the audience.");
+      }
+      break;
+    }
     case "ADVANCE_WEEK": {
       if (selectActiveCast(state).length <= 3) {
         result = invalid(state, "The final begins when three contestants remain.");
+      } else if (state.audienceModel.pendingVote || state.competition.nomineeIds.length > 0) {
+        result = invalid(state, "The current audience vote and elimination must resolve before advancing.");
       } else {
         const next = structuredClone(state);
         next.clock = { tick: next.clock.tick + 1, week: next.clock.week + 1, day: 1, window: "pre_challenge" };
@@ -488,14 +740,78 @@ export function reduceGame(state: GameState, command: GameCommand): CommandResul
       }
       break;
     }
-    case "RESOLVE_FINAL": {
+    case "CLOSE_FINAL_VOTE": {
       const active = selectActiveCast(state);
-      if (active.length !== 3 || !active.includes(command.winnerId)) {
+      const lockingEpisodeId = state.audienceModel.mode === "legacy"
+        ? null
+        : latestAudienceEpisodeId(state, "final");
+      if (active.length !== 3) {
+        result = invalid(state, "The final audience vote requires exactly three finalists.");
+      } else if (state.audienceModel.mode !== "legacy" && !lockingEpisodeId) {
+        result = invalid(state, "The final episode must air before its audience vote closes.");
+      } else {
+        try {
+          const next = structuredClone(state);
+          if (next.audienceModel.mode !== "legacy" && lockingEpisodeId) {
+            const closed = closeAudienceVote(next.audienceModel, {
+              kind: "final",
+              week: next.clock.week,
+              participantIds: active,
+              lockedAfterEpisodeId: lockingEpisodeId,
+            });
+            next.audienceModel = closed.audience;
+          }
+          result = { state: next };
+        } catch (error) {
+          result = invalid(state, error instanceof Error ? error.message : "Unable to close the final vote.");
+        }
+      }
+      break;
+    }
+    case "RESOLVE_FINAL": {
+      if (state.audienceModel.mode === "clustered" && !state.audienceModel.pendingVote) {
+        result = invalid(state, "A locked clustered audience vote is required to resolve the final.");
+        break;
+      }
+      const active = selectActiveCast(state);
+      let winnerId = command.winnerId;
+      let sourceState = state;
+      if (
+        state.audienceModel.mode === "clustered"
+        && state.audienceModel.pendingVote?.kind === "final"
+      ) {
+        try {
+          const consumed = consumePendingAudienceVote(state.audienceModel, "final");
+          winnerId = consumed.result.selectedParticipantId;
+          sourceState = structuredClone(state);
+          sourceState.audienceModel = consumed.audience;
+        } catch (error) {
+          result = invalid(state, error instanceof Error ? error.message : "Unable to resolve the final vote.");
+          break;
+        }
+      } else if (
+        state.audienceModel.mode === "shadow"
+        && state.audienceModel.pendingVote?.kind === "final"
+      ) {
+        try {
+          const consumed = consumePendingAudienceVote(state.audienceModel, "final");
+          sourceState = structuredClone(state);
+          sourceState.audienceModel = consumed.audience;
+        } catch (error) {
+          result = invalid(state, error instanceof Error ? error.message : "Unable to archive the shadow final vote.");
+          break;
+        }
+      }
+      if (!winnerId) {
+        const legacyWinnerId = selectLegacyAudienceVoteChoice(sourceState, "final", active);
+        if (legacyWinnerId) winnerId = legacyWinnerId;
+      }
+      if (active.length !== 3 || !winnerId || !active.includes(winnerId)) {
         result = invalid(state, "Final winner must be one of exactly three active finalists.");
       } else {
-        const next = structuredClone(state);
-        for (const id of active) next.characters[id].status = id === command.winnerId ? "winner" : "finalist";
-        next.competition.winnerId = command.winnerId;
+        const next = structuredClone(sourceState);
+        for (const id of active) next.characters[id].status = id === winnerId ? "winner" : "finalist";
+        next.competition.winnerId = winnerId;
         next.clock.window = "final";
         const sequence = next.house.eventHistory.length + 1;
         next.house.eventHistory.push({
@@ -505,15 +821,17 @@ export function reduceGame(state: GameState, command: GameCommand): CommandResul
           sequence,
           occurredAt: { ...next.clock },
           window: "final",
-          roleBindings: { winner: [command.winnerId], finalists: [...active] },
+          roleBindings: { winner: [winnerId], finalists: [...active] },
           actorIds: [...active],
           sourceEventIds: [],
           sourceThreadIds: [],
-          title: `${castById[command.winnerId].name} vence a temporada`,
+          title: `${castById[winnerId].name} vence a temporada`,
           description: "O resultado final encerra a temporada com um único vencedor.",
           category: "Memória",
           duration: 6,
           heat: 100,
+          audienceSignals: deriveAudienceSignals("Memória", ["competition", "aftermath"]),
+          observablePortrayals: neutralPortrayals(active),
           effects: [],
           scoreBreakdown: { mandatoryAnchor: 100 },
         });

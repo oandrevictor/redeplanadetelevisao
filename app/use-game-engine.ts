@@ -5,7 +5,7 @@ import type { Dispatch } from "react";
 import type { GameCommand } from "@/game/commands";
 import { gameReducer } from "@/game/reducer";
 import { createInitialState } from "@/game/state";
-import type { EventEngineMode, GameState } from "@/game/types";
+import type { AudienceEngineMode, EventEngineMode, GameState } from "@/game/types";
 import { useSeasonSave } from "./use-season-save";
 
 type EngineAction = GameCommand | { type: "__RESTORE_SNAPSHOT"; state: GameState };
@@ -15,9 +15,17 @@ function engineReducer(state: GameState, action: EngineAction): GameState {
   return gameReducer(state, action);
 }
 
-export function useGameEngine(seed: string, mode: EventEngineMode = "shadow") {
-  const [state, engineDispatch] = useReducer(engineReducer, { seed, mode }, ({ seed: initialSeed, mode: initialMode }) =>
-    createInitialState(initialSeed, initialMode));
+export function useGameEngine(
+  seed: string,
+  mode: EventEngineMode = "shadow",
+  audienceMode: AudienceEngineMode = "clustered",
+) {
+  const [state, engineDispatch] = useReducer(
+    engineReducer,
+    { seed, mode, audienceMode },
+    ({ seed: initialSeed, mode: initialMode, audienceMode: initialAudienceMode }) =>
+      createInitialState(initialSeed, initialMode, initialAudienceMode),
+  );
   const { load, save, clear } = useSeasonSave();
   const actionLog = useRef<GameCommand[]>([]);
   const ready = state.revision > 0;
