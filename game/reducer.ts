@@ -95,8 +95,11 @@ function broadcastProvenanceError(state: GameState, episode: BroadcastEpisode): 
       ) ?? [...state.competition.eliminationHistory]
         .reverse()
         .find((result) => result.week === episode.week)?.eliminatedId ?? null;
-    if (revealIds.length !== 1 || !expectedEliminatedId || revealIds[0] !== expectedEliminatedId) {
-      return "An elimination broadcast must contain exactly one canonical reveal matching the locked result.";
+    if (revealIds.length > 1) {
+      return "An elimination broadcast cannot contain more than one canonical reveal.";
+    }
+    if (revealIds.length === 1 && (!expectedEliminatedId || revealIds[0] !== expectedEliminatedId)) {
+      return "An elimination reveal must match the locked result.";
     }
   }
   return null;

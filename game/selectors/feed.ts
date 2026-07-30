@@ -69,7 +69,7 @@ export function selectFeedBatch(
     : batch === "postChallenge"
       ? ["post_challenge"]
       : batch === "party"
-        ? ["party", "campaign"]
+        ? ["post_challenge", "party", "campaign"]
         : batch === "nomination"
           ? ["post_nomination"]
           : ["elimination", "post_elimination"];

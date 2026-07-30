@@ -77,6 +77,7 @@ type Phase =
   | "feedParty"
   | "editVote"
   | "liveVote"
+  | "summaryVote"
   | "feedNomination"
   | "audienceVote"
   | "feedElimination"
@@ -106,11 +107,17 @@ function feedReleaseStageForPhase(phase: Phase): FeedReleaseStage {
     phase === "feedPostChallenge"
     || phase === "summaryPremiere"
     || phase === "summaryChallenge"
-  ) {
-    return "postChallenge";
-  }
-  if (phase === "feedParty" || phase === "editVote" || phase === "liveVote") return "party";
-  if (phase === "feedNomination" || phase === "audienceVote") return "nomination";
+    || phase === "feedParty"
+    || phase === "editVote"
+    || phase === "liveVote"
+  ) return "party";
+  if (
+    phase === "summaryVote"
+    || phase === "feedNomination"
+    || phase === "audienceVote"
+    || phase === "editElimination"
+    || phase === "liveElimination"
+  ) return "nomination";
   return "elimination";
 }
 
@@ -161,7 +168,12 @@ function episodeKindForPhase(phase: Phase): EpisodeKind {
   if (phase === "editChallenge" || phase === "liveChallenge" || phase === "summaryChallenge") {
     return "challenge";
   }
-  if (phase === "editVote" || phase === "liveVote" || phase === "audienceVote") return "vote";
+  if (
+    phase === "editVote"
+    || phase === "liveVote"
+    || phase === "summaryVote"
+    || phase === "audienceVote"
+  ) return "vote";
   if (phase === "editElimination" || phase === "liveElimination" || phase === "weekSummary") {
     return "elimination";
   }
@@ -1127,7 +1139,7 @@ export default function Home() {
     const secondaryItems: FeedPresentationItem[] = sourceItems.map((item) => ({ kind: "secondary", ...item }));
     return week === 1
       && importantEventReleased
-      && (feedReleaseStage === "party" || feedReleaseStage === "nomination" || feedReleaseStage === "elimination")
+      && feedReleaseStage === "party"
       ? withWeekOneImportantEvent(secondaryItems)
       : secondaryItems;
   }, [
@@ -1147,19 +1159,21 @@ export default function Home() {
     && (!broadcast.episode || broadcast.episode.kind === (week === 1 ? "premiere" : "challenge")));
 
   useEffect(() => {
-    if (
-      !engineControls.ready
-      || !uiSaveReady.current
-      || phase !== "feedPostChallenge"
-      || hasAiredCurrentChallengeEpisode
-    ) return;
+    if (!engineControls.ready || !uiSaveReady.current || phase !== "feedPostChallenge") return;
     const frame = window.requestAnimationFrame(() => {
+      if (hasAiredCurrentChallengeEpisode) {
+        dispatchGame({ type: "START_PARTY" });
+        setPhase("feedParty");
+        setView("feed");
+        setWindowOpen(true);
+        return;
+      }
       setPhase(week === 1 ? "editPremiere" : "editChallenge");
       setView("edit");
       setWindowOpen(true);
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [engineControls.ready, hasAiredCurrentChallengeEpisode, phase, week]);
+  }, [dispatchGame, engineControls.ready, hasAiredCurrentChallengeEpisode, phase, week]);
 
   useEffect(() => {
     if (view !== "feed" || !windowOpen || feedSynchronized) return;
@@ -1428,7 +1442,13 @@ export default function Home() {
     startEdit(week === 1 ? "editPremiere" : "editChallenge");
   }
 
-  function continueAfterPostChallengeFeed() {
+  function openNextEpisodeFeed() {
+    if (phase === "summaryVote") {
+      setPhase("feedNomination");
+      setView("feed");
+      setWindowOpen(true);
+      return;
+    }
     dispatchGame({ type: "START_PARTY" });
     setPhase("feedParty");
     setView("feed");
@@ -1696,22 +1716,15 @@ export default function Home() {
     startEdit("editVote");
   }
 
-  function openAudienceVoteAfterNomination() {
-    const command = { type: "CLOSE_AUDIENCE_VOTE" } as const;
-    const canonicalResult = reduceGame(shadowGameState, command);
-    if (canonicalResult.diagnostic) return;
-    dispatchGame(command);
-    const selectedId = canonicalResult.state.competition.nomineeIds.find(
-      (participantId) => canonicalResult.state.characters[participantId]?.flags.audienceResult === true,
-    ) ?? null;
-    setAudiencePick(selectedId);
-    showAudienceWorkflow("audienceVote");
+  function openAudienceVoteAndEditElimination() {
+    setAudiencePick(null);
+    startEdit("editElimination");
   }
 
   function showAudienceWorkflow(
     nextPhase: Extract<
       Phase,
-      "summaryPremiere" | "summaryChallenge" | "audienceVote" | "weekSummary" | "winnerVote"
+      "summaryPremiere" | "summaryChallenge" | "summaryVote" | "audienceVote" | "weekSummary" | "winnerVote"
     >,
   ) {
     setPhase(nextPhase);
@@ -1749,12 +1762,29 @@ export default function Home() {
         dispatchGame(command);
         setNominees(canonicalResult.state.competition.nomineeIds);
       }
-      setPhase("feedNomination");
-      setView("feed");
-      setWindowOpen(true);
+      showAudienceWorkflow("summaryVote");
       return;
     }
     if (phase === "liveElimination") {
+      const closeCommand = { type: "CLOSE_AUDIENCE_VOTE" } as const;
+      const closedVote = reduceGame(shadowGameState, closeCommand);
+      if (closedVote.diagnostic) return;
+      const eliminatedId = closedVote.state.audienceModel.pendingVote?.kind === "elimination"
+        ? closedVote.state.audienceModel.pendingVote.selectedParticipantId
+        : closedVote.state.competition.nomineeIds.find(
+          (participantId) => closedVote.state.characters[participantId]?.flags.audienceResult === true,
+        ) ?? null;
+      if (!eliminatedId) return;
+      const resolveCommand = closedVote.state.audienceModel.mode === "legacy"
+        ? { type: "RESOLVE_ELIMINATION", participantId: eliminatedId } as const
+        : { type: "RESOLVE_ELIMINATION" } as const;
+      const resolvedElimination = reduceGame(closedVote.state, resolveCommand);
+      if (resolvedElimination.diagnostic) return;
+      dispatchGame(closeCommand);
+      dispatchGame(resolveCommand);
+      setAudiencePick(eliminatedId);
+      setLastEliminatedId(eliminatedId);
+      setActiveIds((current) => current.filter((id) => id !== eliminatedId));
       showAudienceWorkflow("weekSummary");
       return;
     }
@@ -1853,9 +1883,6 @@ export default function Home() {
     if (phase === "email") {
       return "Os personagens estao chegando na casa, abra o feed das cameras para dar uma olhada no que está acontecendo";
     }
-    if (phase === "feedPostChallenge") {
-      return "A prova terminou. Confira no feed o resultado e as reações antes de montar o episódio.";
-    }
     if (phase === "feedIntro" || phase === "challenge") {
       return week === 1
         ? "O programa estreia hoje a noite com a primeira prova do lider. Qual vai ser a prova?"
@@ -1863,6 +1890,7 @@ export default function Home() {
     }
     if (phase === "summaryPremiere") return "Boa estreia. Volte ao feed: a casa não para quando a transmissão termina.";
     if (phase === "summaryChallenge") return "A nova liderança está definida. Volte ao feed para acompanhar as consequências.";
+    if (phase === "summaryVote") return "A berlinda está formada. Confira a audiência antes de voltar ao feed e abrir a votação do público.";
     if (phase === "feedParty") return "A festa rendeu. Daqui a dois dias, o episódio termina com a formação da votação.";
     if (phase === "feedNomination") return "A casa votou. Confira a formação da berlinda antes de abrir a votação do público.";
     if (phase === "audienceVote") return "A votação está aberta. Agora o público decide quem deve sair.";
@@ -1916,14 +1944,12 @@ export default function Home() {
           <div className="feed-heading">
             <h2>FEED DAS CÂMERAS</h2>
             <span>{feedReleaseStage === "party"
-              ? "Madrugada pós-festa"
+              ? "Repercussão da prova e madrugada pós-festa"
               : feedReleaseStage === "nomination"
                 ? "Votação da casa e formação da berlinda"
                 : feedReleaseStage === "elimination"
                   ? "Resultado da eliminação e despedida"
-                  : feedReleaseStage === "postChallenge"
-                    ? "Resultado e repercussão da prova"
-                    : week === 1 ? "Chegada dos participantes" : `Início da semana ${week}`}</span>
+                  : week === 1 ? "Chegada dos participantes" : `Início da semana ${week}`}</span>
           </div>
           <div className="live-chip"><i /> SINAL AO VIVO</div>
           <div className={`feed-header-status${feedSynchronized ? " is-synced" : ""}`} role="status">
@@ -2125,16 +2151,12 @@ export default function Home() {
               Ir para edição do episódio
             </button>
           ) : phase === "feedNomination" ? (
-            <button className="button button-primary" disabled={!feedSynchronized} onClick={openAudienceVoteAfterNomination} type="button">
-              Abrir votação do público
+            <button className="button button-primary" disabled={!feedSynchronized} onClick={openAudienceVoteAndEditElimination} type="button">
+              Abrir votação e editar episódio de eliminação
             </button>
           ) : phase === "feedElimination" ? (
             <button className="button button-primary" disabled={!feedSynchronized} onClick={() => startEdit("editElimination")} type="button">
               Ir para edição da eliminação
-            </button>
-          ) : feedReleaseStage === "postChallenge" ? (
-            <button className="button button-primary" disabled={!feedSynchronized} onClick={continueAfterPostChallengeFeed} type="button">
-              Continuar acompanhando a casa
             </button>
           ) : (
             <button
@@ -2231,6 +2253,7 @@ export default function Home() {
       : false;
     const showImportantFootage = week === 1
       && importantEventReleased
+      && phase === "editVote"
       && !importantBlockInTimeline
       && Boolean(weekOneImportantEventChain && importantCardEdit);
     const transmissionBlocked = eventCount < 2 || missingRequiredEvents.length > 0;
@@ -2539,8 +2562,9 @@ export default function Home() {
   }
 
   function renderAudienceWorkflow() {
-    if (phase === "summaryPremiere" || phase === "summaryChallenge") {
+    if (phase === "summaryPremiere" || phase === "summaryChallenge" || phase === "summaryVote") {
       const premiere = phase === "summaryPremiere";
+      const voteSummary = phase === "summaryVote";
       const result = latestAudienceResult;
       const metTarget = (result?.averageRating ?? 0)
         >= shadowGameState.audienceModel.market.networkTargetPoints;
@@ -2548,14 +2572,20 @@ export default function Home() {
         <section className="audience-workflow audience-workflow-summary" aria-labelledby="audience-workflow-title">
           <header className="audience-workflow-heading">
             <div>
-              <span>RELATÓRIO DE EXIBIÇÃO · EPISÓDIO {String(week * 3 - 2).padStart(2, "0")}</span>
+              <span>
+                RELATÓRIO DE EXIBIÇÃO · EPISÓDIO {String(voteSummary ? week * 3 - 1 : week * 3 - 2).padStart(2, "0")}
+              </span>
               <h2 id="audience-workflow-title">
-                {premiere
+                {voteSummary
+                  ? `Berlinda da semana ${week} formada`
+                  : premiere
                   ? metTarget ? "Estreia acima da meta" : "A estreia encontrou seu público"
                   : `Liderança da semana ${week} definida`}
               </h2>
               <p>
-                {premiere
+                {voteSummary
+                  ? `${nominees.map((id) => participantById[id]?.name).filter(Boolean).join(" e ")} disputam a permanência do público.`
+                  : premiere
                   ? `O elenco foi apresentado e ${leader?.name ?? "um participante"} encerrou a noite na liderança.`
                   : `${leader?.name ?? "Um participante"} venceu a prova${challengeRunnerUp ? `, com ${challengeRunnerUp.name} na segunda colocação` : ""}.`}
               </p>
@@ -2570,14 +2600,10 @@ export default function Home() {
             <p>O relatório completo desta transmissão está disponível abaixo.</p>
             <button
               className="button button-primary"
-              onClick={() => {
-                setPhase("feedPostChallenge");
-                setView("feed");
-                setWindowOpen(true);
-              }}
+              onClick={openNextEpisodeFeed}
               type="button"
             >
-              Ver repercussão da prova no feed
+              Voltar ao feed
             </button>
           </footer>
         </section>

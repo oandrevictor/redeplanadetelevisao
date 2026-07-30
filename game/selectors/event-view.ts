@@ -37,8 +37,7 @@ export function isRequiredEpisodeFootage(
     return false;
   }
   if (episodeKind === "elimination") {
-    return event.templateId === "anchor:elimination-result"
-      || event.templateId === "anchor:farewell";
+    return false;
   }
   return event.templateId === "anchor:finalist-speech"
     || event.templateId === "anchor:season-retrospective";

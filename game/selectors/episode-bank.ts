@@ -1,5 +1,5 @@
 import type { EventInstance, GameState } from "../types";
-import { selectReleasedEvents } from "./released-events";
+import { isStoryWindowReleased, selectReleasedEvents } from "./released-events";
 
 export type EpisodeKind = "premiere" | "challenge" | "vote" | "elimination" | "final";
 
@@ -8,8 +8,8 @@ const windowsByEpisode: Record<EpisodeKind, Set<EventInstance["window"]>> = {
   challenge: new Set(["pre_challenge"]),
   // The voting episode is assembled before the house forms the nomination.
   // Post-nomination material is released through the feed afterwards.
-  vote: new Set(["party", "campaign"]),
-  elimination: new Set(["elimination", "post_elimination"]),
+  vote: new Set(["post_challenge", "party", "campaign"]),
+  elimination: new Set(["post_nomination"]),
   final: new Set(["final"]),
 };
 
@@ -17,6 +17,9 @@ export function selectAvailableFootage(
   state: GameState,
   options: { week: number; episodeKind: EpisodeKind; excludedInstanceIds?: Iterable<string> },
 ): EventInstance[] {
+  if (options.episodeKind === "vote" && !isStoryWindowReleased(state, "party", options.week)) {
+    return [];
+  }
   const excluded = new Set(options.excludedInstanceIds ?? []);
   return selectReleasedEvents(state)
     .filter((event) => {

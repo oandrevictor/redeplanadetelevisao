@@ -425,6 +425,11 @@ test("results enter the feed only after their episode and never leak into a late
   assert.ok(!selectAvailableFootage(state, { week: 1, episodeKind: "vote" })
     .some((event) => event.id === challengeAnchor.id));
 
+  state = command(state, { type: "START_PARTY" });
+  assert.deepEqual(
+    selectAvailableFootage(state, { week: 1, episodeKind: "vote" }).map((event) => event.id),
+    selectFeedBatch(state, "party", 1).map((event) => event.id),
+  );
   state = markEpisodeAired(state, "vote", 1);
   state = command(state, { type: "FORM_NOMINATION" });
   const nominationAnchor = state.house.eventHistory.find((event) => event.templateId === "anchor:nomination-result");
@@ -433,8 +438,10 @@ test("results enter the feed only after their episode and never leak into a late
     .some((event) => event.id === nominationAnchor.id));
   assert.ok(selectFeedBatch(state, "nomination", 1)
     .some((event) => event.id === nominationAnchor.id));
-  assert.ok(!selectAvailableFootage(state, { week: 1, episodeKind: "elimination" })
-    .some((event) => event.id === nominationAnchor.id));
+  assert.deepEqual(
+    selectAvailableFootage(state, { week: 1, episodeKind: "elimination" }).map((event) => event.id),
+    selectFeedBatch(state, "nomination", 1).map((event) => event.id),
+  );
   assert.ok(!selectAvailableFootage(state, { week: 1, episodeKind: "premiere" })
     .some((event) => event.id === nominationAnchor.id));
 });
@@ -488,8 +495,8 @@ test("episode filters consume the same released chronology for every episode kin
   const allowed = {
     premiere: new Set(["arrival"]),
     challenge: new Set(["pre_challenge"]),
-    vote: new Set(["party", "campaign"]),
-    elimination: new Set(["elimination", "post_elimination"]),
+    vote: new Set(["post_challenge", "party", "campaign"]),
+    elimination: new Set(["post_nomination"]),
     final: new Set(["final"]),
   } as const;
   for (const [episodeKind, windows] of Object.entries(allowed)) {
@@ -583,8 +590,8 @@ test("editor requirements are episode-scoped and house voting stays consolidated
   assert.equal(isRequiredEpisodeFootage(challenge, "challenge"), false);
   assert.equal(isRequiredEpisodeFootage(nomination, "vote"), false);
   assert.equal(isRequiredEpisodeFootage(nomination, "elimination"), false);
-  assert.equal(isRequiredEpisodeFootage(eliminationResult, "elimination"), true);
-  assert.equal(isRequiredEpisodeFootage(farewell, "elimination"), true);
+  assert.equal(isRequiredEpisodeFootage(eliminationResult, "elimination"), false);
+  assert.equal(isRequiredEpisodeFootage(farewell, "elimination"), false);
   assert.equal(isRequiredEpisodeFootage(finalistSpeech, "final"), true);
   assert.equal(isRequiredEpisodeFootage(retrospective, "final"), true);
 });
@@ -698,8 +705,10 @@ test("nomination and elimination footage are released only after their canonical
   ).length, 0);
   assert.ok(!selectAvailableFootage(state, { week: 1, episodeKind: "vote" })
     .some((event) => event.window === "post_nomination"));
-  assert.ok(!selectAvailableFootage(state, { week: 1, episodeKind: "elimination" })
-    .some((event) => event.window === "post_nomination"));
+  assert.deepEqual(
+    selectAvailableFootage(state, { week: 1, episodeKind: "elimination" }).map((event) => event.id),
+    selectFeedBatch(state, "nomination", 1).map((event) => event.id),
+  );
 
   state = command(state, { type: "CLOSE_AUDIENCE_VOTE" });
   assert.ok(!selectReleasedFeedEvents(state).some(
@@ -711,10 +720,9 @@ test("nomination and elimination footage are released only after their canonical
   assert.equal(state.house.eventHistory.filter(
     (event) => event.templateId === "anchor:elimination-result",
   ).length, 1);
-  const eliminationFeed = selectFeedBatch(state, "elimination", 1);
   const eliminationBank = selectAvailableFootage(state, { week: 1, episodeKind: "elimination" });
-  assert.deepEqual(eliminationBank.map((event) => event.id), eliminationFeed.map((event) => event.id));
-  assert.ok(eliminationBank.some((event) => event.templateId === "anchor:elimination-result"));
+  assert.ok(eliminationBank.every((event) => event.window === "post_nomination"));
+  assert.ok(!eliminationBank.some((event) => event.templateId === "anchor:elimination-result"));
 });
 
 test("changing a leader relationship changes the nomination target", () => {

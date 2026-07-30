@@ -67,6 +67,7 @@ test("source contains the complete playable season loop", async () => {
     "livePremiere",
     "feedParty",
     "editVote",
+    "summaryVote",
     "feedNomination",
     "audienceVote",
     "feedElimination",
@@ -149,17 +150,21 @@ test("the camera Feed exposes the complete synchronized source, filters, selecti
   assert.match(feedSource, /ABRIR ACONTECIMENTO/);
   assert.doesNotMatch(feedSource, /CRONOLOGIA|ORDEM CRONOLÓGICA|Sequência do acontecimento/);
   assert.match(feedSource, /Ir para edição do episódio/);
-  assert.match(page, /setPhase\("feedPostChallenge"\)/);
-  assert.match(page, /continueAfterPostChallengeFeed/);
-  assert.match(page, /openAudienceVoteAfterNomination/);
-  assert.match(page, /setPhase\("feedElimination"\)/);
+  assert.match(page, /function openNextEpisodeFeed\(\)/);
+  assert.match(page, /setPhase\("feedParty"\)/);
+  assert.match(page, /openAudienceVoteAndEditElimination/);
+  assert.match(page, /Abrir votação e editar episódio de eliminação/);
+  assert.match(page, /phase === "liveVote"[\s\S]*FORM_NOMINATION[\s\S]*showAudienceWorkflow\("summaryVote"\)/);
+  assert.match(page, /phase === "summaryVote"[\s\S]*setPhase\("feedNomination"\)/);
+  assert.match(page, /Berlinda da semana \$\{week\} formada/);
+  assert.match(page, /phase === "liveElimination"[\s\S]*CLOSE_AUDIENCE_VOTE[\s\S]*RESOLVE_ELIMINATION[\s\S]*showAudienceWorkflow\("weekSummary"\)/);
   assert.match(
     page.slice(page.indexOf("function confirmChallenge()"), page.indexOf("function participantIdsForEditorEvent")),
     /type: "SELECT_CHALLENGE"[\s\S]*startEdit\(week === 1 \? "editPremiere" : "editChallenge"\)/,
   );
   assert.match(page, /phase === "livePremiere"[\s\S]*type: "CONFIRM_CHALLENGE"/);
-  assert.match(page, /Ver repercussão da prova no feed/);
-  assert.match(page, /Continuar acompanhando a casa/);
+  assert.match(page, /Voltar ao feed/);
+  assert.doesNotMatch(page, /Continuar acompanhando a casa/);
   assert.doesNotMatch(feedSource, /Avançar 2 dias e editar episódio/);
   assert.doesNotMatch(feedSource, /Registro secundário · sem micro-história editável/);
   assert.match(css, /grid-template-columns:\s*minmax\(0, 64fr\) minmax\(260px, 36fr\)/);
